@@ -1,0 +1,27 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+
+# EF Core / SQLite data
+*.db
+*.db-shm
+*.db-wal
+src/Api/App_Data/
+
+# Node / client
+client/node_modules/
+client/dist/
+client/.vite/
+client/test-results/
+client/playwright-report/
+client/playwright/.cache/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# OS
+.DS_Store
