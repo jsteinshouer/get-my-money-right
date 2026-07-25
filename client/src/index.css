@@ -1,0 +1,9 @@
+@import '@picocss/pico';
+
+body {
+  margin: 0;
+}
+
+main.container {
+  padding-block: var(--pico-spacing);
+}
