@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Api.Data;
 using Api.Features;
 using Api.Features.Identity;
@@ -9,6 +10,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<BudgetDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("BudgetDb")));
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 builder.Services
     .AddIdentity<ApplicationUser, IdentityRole>()
