@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "bash scripts/test-e2e.sh"
   },
   "dependencies": {
     "@picocss/pico": "^2.1.1",
