@@ -19,6 +19,9 @@ export function AppLayout() {
           <li>
             <NavLink to="/accounts">Accounts</NavLink>
           </li>
+          <li>
+            <NavLink to="/categories">Categories</NavLink>
+          </li>
         </ul>
         <ul>
           <li>Signed in as {user?.displayName}</li>

@@ -1,5 +1,6 @@
 using System.Reflection;
 using Api.Features.Accounts;
+using Api.Features.Categories;
 using Api.Features.Identity;
 using FluentValidation;
 using SharpGrip.FluentValidation.AutoValidation.Endpoints.Extensions;
@@ -12,13 +13,15 @@ public static class Features
         .AddFluentValidationAutoValidation()
         .AddValidatorsFromAssembly(Assembly.GetExecutingAssembly())
         .AddIdentityFeature()
-        .AddAccountsFeature();
+        .AddAccountsFeature()
+        .AddCategoriesFeature();
 
     public static IEndpointRouteBuilder MapFeatures(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/api");
         group.MapIdentityFeature();
         group.MapAccountsFeature();
+        group.MapCategoriesFeature();
         return endpoints;
     }
 

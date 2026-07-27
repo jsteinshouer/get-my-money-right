@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Api;
 using Api.Data;
 using Api.Features;
 using Api.Features.Identity;
@@ -39,11 +40,11 @@ builder.Services.AddAuthorization();
 
 builder.Services.Configure<List<Identity.SeedUser>>(builder.Configuration.GetSection("HouseholdUsers"));
 
-builder.AddExceptionMapper(config =>
-{
-    config.Map<DbUpdateException>().ToStatusCode(StatusCodes.Status409Conflict);
-    config.Map<DbUpdateConcurrencyException>().ToStatusCode(StatusCodes.Status409Conflict);
-});
+// Registered ahead of AddExceptionMapper so it intercepts DbUpdateException/DbUpdateConcurrencyException
+// before ForEvolve's own pipeline gets a chance (see DbUpdateExceptionHandler for why).
+builder.Services.AddExceptionHandler<DbUpdateExceptionHandler>();
+
+builder.AddExceptionMapper();
 
 builder.Services.AddFeatures();
 
