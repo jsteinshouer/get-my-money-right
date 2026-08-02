@@ -23,8 +23,8 @@ public class DeleteTests : IClassFixture<BudgetApiFactory>
     {
         var client = _factory.CreateClient();
         await client.LoginAsync(BudgetApiFactory.SeededUser1Email, BudgetApiFactory.SeededUser1Password);
-        var created = await client.PostAsJsonAsync("/api/categories", new Create.Command("Delete Target"));
-        var createdCategory = (await created.Content.ReadFromJsonAsync<Create.Response>())!;
+        var created = await client.PostAsJsonAsync("/api/categories", new Api.Features.Categories.Categories.Create.Command("Delete Target"));
+        var createdCategory = (await created.Content.ReadFromJsonAsync<Api.Features.Categories.Categories.Create.Response>())!;
 
         var response = await client.DeleteAsync($"/api/categories/{createdCategory.Id}");
 
@@ -52,8 +52,8 @@ public class DeleteTests : IClassFixture<BudgetApiFactory>
         await client.LoginAsync(BudgetApiFactory.SeededUser1Email, BudgetApiFactory.SeededUser1Password);
         var me = await client.GetFromJsonAsync<Me.Response>("/api/identity/me");
         var userId = me!.Id;
-        var created = await client.PostAsJsonAsync("/api/categories", new Create.Command("Delete In-Use Category"));
-        var createdCategory = (await created.Content.ReadFromJsonAsync<Create.Response>())!;
+        var created = await client.PostAsJsonAsync("/api/categories", new Api.Features.Categories.Categories.Create.Command("Delete In-Use Category"));
+        var createdCategory = (await created.Content.ReadFromJsonAsync<Api.Features.Categories.Categories.Create.Response>())!;
 
         using (var scope = _factory.Services.CreateScope())
         {

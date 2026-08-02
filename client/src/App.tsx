@@ -6,6 +6,7 @@ import { LoginPage } from './pages/LoginPage'
 import { ShellPage } from './pages/ShellPage'
 import { AccountsPage } from './pages/AccountsPage'
 import { CategoriesPage } from './pages/CategoriesPage'
+import { TransactionsPage } from './pages/TransactionsPage'
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
             <Route path="/" element={<ShellPage />} />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
+            <Route path="/transactions" element={<TransactionsPage />} />
           </Route>
         </Routes>
       </AuthProvider>

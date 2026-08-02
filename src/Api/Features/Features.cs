@@ -2,6 +2,7 @@ using System.Reflection;
 using Api.Features.Accounts;
 using Api.Features.Categories;
 using Api.Features.Identity;
+using Api.Features.Transactions;
 using FluentValidation;
 using SharpGrip.FluentValidation.AutoValidation.Endpoints.Extensions;
 
@@ -14,7 +15,8 @@ public static class Features
         .AddValidatorsFromAssembly(Assembly.GetExecutingAssembly())
         .AddIdentityFeature()
         .AddAccountsFeature()
-        .AddCategoriesFeature();
+        .AddCategoriesFeature()
+        .AddTransactionsFeature();
 
     public static IEndpointRouteBuilder MapFeatures(this IEndpointRouteBuilder endpoints)
     {
@@ -22,6 +24,7 @@ public static class Features
         group.MapIdentityFeature();
         group.MapAccountsFeature();
         group.MapCategoriesFeature();
+        group.MapTransactionsFeature();
         return endpoints;
     }
 
