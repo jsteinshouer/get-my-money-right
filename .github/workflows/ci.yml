@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install client dependencies
+        run: npm ci
+        working-directory: client
+
+      - name: Lint (oxlint)
+        run: npm run lint
+        working-directory: client
+
+      - name: Type check
+        run: npx tsc -b --noEmit
+        working-directory: client
+
+  backend-tests:
+    name: Backend unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore budget.slnx
+
+      - name: Build
+        run: dotnet build budget.slnx --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test tests/Api.Tests/Api.Tests.csproj --no-build --configuration Release
+
+  e2e-tests:
+    name: E2E tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Restore backend
+        run: dotnet restore src/Api/Api.csproj
+
+      - name: Install client dependencies
+        run: npm ci
+        working-directory: client
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: client
+
+      - name: Run e2e tests
+        run: npm run test:e2e
+        working-directory: client
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: client/playwright-report/
+          retention-days: 7
