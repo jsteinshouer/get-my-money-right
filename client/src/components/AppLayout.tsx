@@ -25,6 +25,9 @@ export function AppLayout() {
           <li>
             <NavLink to="/transactions">Transactions</NavLink>
           </li>
+          <li>
+            <NavLink to="/budgets">Budgets</NavLink>
+          </li>
         </ul>
         <ul>
           <li>Signed in as {user?.displayName}</li>
