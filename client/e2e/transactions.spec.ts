@@ -13,12 +13,14 @@ test('manually adding a transaction shows it in the filtered list', async ({ pag
   const description = `E2E Txn ${stamp}`
 
   await page.getByRole('link', { name: 'Accounts' }).click()
+  await expect(page.getByRole('heading', { name: 'Accounts' })).toBeVisible()
   await page.getByLabel('Name').fill(accountName)
   await page.getByLabel('Type').selectOption('Checking')
   await page.getByRole('button', { name: 'Add account' }).click()
   await expect(page.getByRole('row').filter({ hasText: accountName })).toBeVisible()
 
   await page.getByRole('link', { name: 'Categories' }).click()
+  await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible()
   await page.getByLabel('Name').fill(categoryName)
   await page.getByRole('button', { name: 'Add category' }).click()
   await expect(page.getByRole('row').filter({ hasText: categoryName })).toBeVisible()
