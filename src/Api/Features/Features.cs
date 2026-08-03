@@ -1,5 +1,6 @@
 using System.Reflection;
 using Api.Features.Accounts;
+using Api.Features.Budgets;
 using Api.Features.Categories;
 using Api.Features.Identity;
 using Api.Features.Transactions;
@@ -16,7 +17,8 @@ public static class Features
         .AddIdentityFeature()
         .AddAccountsFeature()
         .AddCategoriesFeature()
-        .AddTransactionsFeature();
+        .AddTransactionsFeature()
+        .AddBudgetsFeature();
 
     public static IEndpointRouteBuilder MapFeatures(this IEndpointRouteBuilder endpoints)
     {
@@ -25,6 +27,7 @@ public static class Features
         group.MapAccountsFeature();
         group.MapCategoriesFeature();
         group.MapTransactionsFeature();
+        group.MapBudgetsFeature();
         return endpoints;
     }
 

@@ -1,4 +1,5 @@
 using Api.Features.Accounts;
+using Api.Features.Budgets;
 using Api.Features.Categories;
 using Api.Features.Transactions;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -15,6 +16,7 @@ public class BudgetDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Accounts.Account> Accounts => Set<Accounts.Account>();
     public DbSet<Categories.Category> Categories => Set<Categories.Category>();
     public DbSet<Transactions.Transaction> Transactions => Set<Transactions.Transaction>();
+    public DbSet<Budgets.Budget> Budgets => Set<Budgets.Budget>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -56,6 +58,20 @@ public class BudgetDbContext : IdentityDbContext<ApplicationUser>
             .HasOne<ApplicationUser>()
             .WithMany()
             .HasForeignKey(t => t.CreatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Budgets.Budget>()
+            .Property(b => b.Amount)
+            .HasColumnType("decimal(18,2)");
+
+        builder.Entity<Budgets.Budget>()
+            .HasIndex(b => new { b.CategoryId, b.Year, b.Month })
+            .IsUnique();
+
+        builder.Entity<Budgets.Budget>()
+            .HasOne<Categories.Category>()
+            .WithMany()
+            .HasForeignKey(b => b.CategoryId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
