@@ -31,21 +31,22 @@ test('actual spend on the budgets page reflects transactions in that category an
   await page.getByRole('link', { name: 'Budgets' }).click()
   await expect(page.getByRole('heading', { name: 'Budgets' })).toBeVisible()
   await page.getByLabel('Month', { exact: true }).fill(MONTH)
-  await page.getByLabel('Category').selectOption({ label: categoryName })
-  await page.getByLabel('Monthly limit').fill('200.00')
+  const budgetForm = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Set a category budget' }) })
+  await budgetForm.getByLabel('Category').selectOption({ label: categoryName })
+  await budgetForm.getByLabel('Monthly limit').fill('200.00')
   await page.getByRole('button', { name: 'Save budget' }).click()
 
   await expectActualCells(page, categoryName, { actual: '0.00', remaining: '200.00 left' })
 
   await addTransaction(page, { accountName, categoryName, amount: '-75.25', description: `E2E Actual A ${stamp}` })
-  await expectActual(page, categoryName, { actual: '75.25', remaining: '124.75 left' })
+  await reopenBudgetsAndExpectActual(page, categoryName, { actual: '75.25', remaining: '124.75 left' })
 
   await addTransaction(page, { accountName, categoryName, amount: '-25.00', description: `E2E Actual B ${stamp}` })
-  await expectActual(page, categoryName, { actual: '100.25', remaining: '99.75 left' })
+  await reopenBudgetsAndExpectActual(page, categoryName, { actual: '100.25', remaining: '99.75 left' })
 
   // Spending past the limit flips remaining to an over-budget reading.
   await addTransaction(page, { accountName, categoryName, amount: '-150.00', description: `E2E Actual C ${stamp}` })
-  await expectActual(page, categoryName, { actual: '250.25', remaining: '50.25 over' })
+  await reopenBudgetsAndExpectActual(page, categoryName, { actual: '250.25', remaining: '50.25 over' })
 })
 
 async function addTransaction(
@@ -67,7 +68,7 @@ async function addTransaction(
 }
 
 /** Reloads the budgets page for the pinned month, then asserts the category's actual-vs-limit cells. */
-async function expectActual(
+async function reopenBudgetsAndExpectActual(
   page: Page,
   categoryName: string,
   amounts: { actual: string; remaining: string },

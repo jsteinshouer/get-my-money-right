@@ -151,11 +151,7 @@ export function BudgetsPage() {
                 <tr key={budget.id}>
                   <td>{categoryName(budget.categoryId)}</td>
                   <td>{budget.amount.toFixed(2)}</td>
-                  <td>{budget.actual.toFixed(2)}</td>
-                  <td>{remainingLabel(budget)}</td>
-                  <td>
-                    <SpendProgress budget={budget} categoryLabel={categoryName(budget.categoryId)} />
-                  </td>
+                  <ActualCells budget={budget} categoryLabel={categoryName(budget.categoryId)} />
                   <td>
                     <button className="secondary" onClick={() => setEditingId(budget.id)}>
                       Edit
@@ -207,15 +203,22 @@ export function BudgetsPage() {
   )
 }
 
-function SpendProgress({ budget, categoryLabel }: { budget: BudgetWithActual; categoryLabel: string }) {
+/** The actual-vs-limit half of a budget row — identical whether or not the row is being edited. */
+function ActualCells({ budget, categoryLabel }: { budget: BudgetWithActual; categoryLabel: string }) {
   // A refunded-into category can go negative; the bar floors at empty and caps at full.
   const clamped = Math.min(Math.max(budget.actual, 0), budget.amount)
   return (
-    <progress
-      value={clamped}
-      max={budget.amount}
-      aria-label={`${categoryLabel}: ${budget.actual.toFixed(2)} of ${budget.amount.toFixed(2)} spent`}
-    />
+    <>
+      <td>{budget.actual.toFixed(2)}</td>
+      <td>{remainingLabel(budget)}</td>
+      <td>
+        <progress
+          value={clamped}
+          max={budget.amount}
+          aria-label={`${categoryLabel}: ${budget.actual.toFixed(2)} of ${budget.amount.toFixed(2)} spent`}
+        />
+      </td>
+    </>
   )
 }
 
@@ -255,11 +258,7 @@ function EditRow({
       <td>
         <input aria-label="Monthly limit" type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
       </td>
-      <td>{budget.actual.toFixed(2)}</td>
-      <td>{remainingLabel(budget)}</td>
-      <td>
-        <SpendProgress budget={budget} categoryLabel={categoryLabel} />
-      </td>
+      <ActualCells budget={budget} categoryLabel={categoryLabel} />
       <td>
         <button aria-busy={saving} disabled={saving} onClick={() => void handleSave()}>
           Save
