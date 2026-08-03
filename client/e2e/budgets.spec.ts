@@ -25,11 +25,11 @@ test('setting a category budget shows it in the current month list after reload'
 
   const row = page.getByRole('row').filter({ hasText: categoryName })
   await expect(row).toBeVisible()
-  await expect(row.getByText('325.00')).toBeVisible()
+  await expect(row.getByRole('cell', { name: '325.00', exact: true })).toBeVisible()
 
   await page.reload()
 
   const reloadedRow = page.getByRole('row').filter({ hasText: categoryName })
   await expect(reloadedRow).toBeVisible()
-  await expect(reloadedRow.getByText('325.00')).toBeVisible()
+  await expect(reloadedRow.getByRole('cell', { name: '325.00', exact: true })).toBeVisible()
 })
