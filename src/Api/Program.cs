@@ -48,6 +48,8 @@ builder.AddExceptionMapper();
 
 builder.Services.AddFeatures();
 
+builder.Services.AddDemoDataSeeder();
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
@@ -64,6 +66,7 @@ app.UseAuthorization();
 app.MapFeatures();
 
 await app.SeedFeaturesAsync();
+await app.SeedDemoDataAsync();
 
 app.Run();
 

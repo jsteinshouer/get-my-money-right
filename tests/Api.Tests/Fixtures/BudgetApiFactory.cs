@@ -22,6 +22,9 @@ public class BudgetApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public const string SeededUser2Email = "testuser2@household.local";
     public const string SeededUser2Password = "Test123!Password";
 
+    /// <summary>Off for every test but the seeder's own, so tests see only the rows they create.</summary>
+    protected virtual bool SeedDemoData => false;
+
     public async Task InitializeAsync()
     {
         _connection = new SqliteConnection("DataSource=:memory:");
@@ -42,6 +45,7 @@ public class BudgetApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 ["HouseholdUsers:1:Email"] = SeededUser2Email,
                 ["HouseholdUsers:1:Password"] = SeededUser2Password,
                 ["HouseholdUsers:1:DisplayName"] = "Test User Two",
+                ["SeedDemoData"] = SeedDemoData.ToString(),
             });
         });
 

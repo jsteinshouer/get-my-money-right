@@ -22,6 +22,8 @@ export default defineConfig({
       env: {
         ASPNETCORE_ENVIRONMENT: 'Development',
         ConnectionStrings__BudgetDb: 'Data Source=e2e.db',
+        // Keep the e2e database to exactly what the specs put in it.
+        SeedDemoData: 'false',
       },
     },
     {
