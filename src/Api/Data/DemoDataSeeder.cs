@@ -15,9 +15,9 @@ namespace Api.Data;
 /// accounts, categories, monthly budgets and the transactions that spend against them.
 /// </summary>
 /// <remarks>
-/// Runs only when the <c>SeedDemoData</c> setting is true, and <b>destroys all existing data</b>
-/// when it does, users included. Every start therefore lands on the same known state rather than
-/// accumulating rows. Never enable it against a database whose contents matter.
+/// Runs only when the <c>SeedDemoData</c> setting is true <i>and</i> the app is in Development, and
+/// <b>destroys all existing data</b> when it does, users included. Every start therefore lands on
+/// the same known state rather than accumulating rows. Never point it at a database that matters.
 /// </remarks>
 public class DemoDataSeeder
 {
@@ -228,11 +228,24 @@ public static class DemoDataSeederExtensions
     public static IServiceCollection AddDemoDataSeeder(this IServiceCollection services) => services
         .AddScoped<DemoDataSeeder>();
 
-    /// <summary>Seeds demo data if the <c>SeedDemoData</c> setting is on; otherwise does nothing.</summary>
+    /// <summary>
+    /// Resets the database to the demo state if the <c>SeedDemoData</c> setting is on and the app is
+    /// running in Development; otherwise does nothing.
+    /// </summary>
     public static async Task SeedDemoDataAsync(this WebApplication app)
     {
         if (!app.Configuration.GetValue<bool>("SeedDemoData"))
         {
+            return;
+        }
+
+        if (!app.Environment.IsDevelopment())
+        {
+            // Refused rather than obeyed: this setting destroys every row, and nothing outside a
+            // developer's own machine should be able to ask for that by flipping a flag.
+            app.Logger.LogWarning(
+                "SeedDemoData is on but the environment is {Environment}, not Development; the database was left untouched.",
+                app.Environment.EnvironmentName);
             return;
         }
 

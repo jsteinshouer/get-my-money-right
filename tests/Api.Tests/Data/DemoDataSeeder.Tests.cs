@@ -1,8 +1,11 @@
 using System.Net.Http.Json;
 using Api.Data;
 using Api.Tests.Fixtures;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using static Api.Features.Budgets.Budgets;
+using AccountsFeature = Api.Features.Accounts.Accounts;
 using CategoriesFeature = Api.Features.Categories.Categories;
 using IdentityFeature = Api.Features.Identity.Identity;
 using TransactionsFeature = Api.Features.Transactions.Transactions;
@@ -13,6 +16,25 @@ namespace Api.Tests.Data;
 public class DemoDataApiFactory : BudgetApiFactory
 {
     protected override bool SeedDemoData => true;
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        // The seeder refuses to run outside Development, so the host has to say it is Development.
+        builder.UseEnvironment(Environments.Development);
+        base.ConfigureWebHost(builder);
+    }
+}
+
+/// <summary>Asks for demo seeding from a non-Development environment, where it must be refused.</summary>
+public class ProductionDemoDataApiFactory : BudgetApiFactory
+{
+    protected override bool SeedDemoData => true;
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseEnvironment(Environments.Production);
+        base.ConfigureWebHost(builder);
+    }
 }
 
 public class DemoDataSeederTests : IClassFixture<DemoDataApiFactory>
@@ -114,4 +136,29 @@ public class DemoDataSeederTests : IClassFixture<DemoDataApiFactory>
     private static async Task<List<TransactionsFeature.FetchAll.Response>> FetchTransactionsAsync(HttpClient client) =>
         (await client.GetFromJsonAsync<List<TransactionsFeature.FetchAll.Response>>(
             "/api/transactions", TestClientExtensions.JsonOptions))!;
+}
+
+public class DemoDataSeederOutsideDevelopmentTests : IClassFixture<ProductionDemoDataApiFactory>
+{
+    private readonly ProductionDemoDataApiFactory _factory;
+
+    public DemoDataSeederOutsideDevelopmentTests(ProductionDemoDataApiFactory factory)
+    {
+        _factory = factory;
+    }
+
+    [Fact]
+    public async Task SeedDemoDataOutsideDevelopment_IsRefusedAndLeavesTheDatabaseEmpty()
+    {
+        var client = _factory.CreateClient();
+        // The household users still seed the ordinary way, so there is a session to look with.
+        await client.LoginAsync(BudgetApiFactory.SeededUser1Email, BudgetApiFactory.SeededUser1Password);
+
+        var categories = await client.GetFromJsonAsync<List<CategoriesFeature.FetchAll.Response>>("/api/categories");
+        var accounts = await client.GetFromJsonAsync<List<AccountsFeature.FetchAll.Response>>(
+            "/api/accounts", TestClientExtensions.JsonOptions);
+
+        Assert.Empty(categories!);
+        Assert.Empty(accounts!);
+    }
 }
