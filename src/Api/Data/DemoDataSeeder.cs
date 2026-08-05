@@ -1,19 +1,23 @@
 using Api.Features.Accounts;
 using Api.Features.Budgets;
 using Api.Features.Categories;
+using Api.Features.Identity;
 using Api.Features.Transactions;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Api.Data;
 
 /// <summary>
-/// Fills a development database with a plausible three-month household history — accounts,
-/// categories, monthly budgets and the transactions that spend against them — so the UI has
-/// something to show without hand-entering it.
+/// Resets a development database to a known demo state: everything already in it is deleted, then
+/// the configured household users are recreated along with a plausible three-month history —
+/// accounts, categories, monthly budgets and the transactions that spend against them.
 /// </summary>
 /// <remarks>
-/// Runs only when the <c>SeedDemoData</c> setting is true, and re-running is a no-op once the
-/// demo accounts exist, so restarting the app never duplicates rows or disturbs real data.
+/// Runs only when the <c>SeedDemoData</c> setting is true, and <b>destroys all existing data</b>
+/// when it does, users included. Every start therefore lands on the same known state rather than
+/// accumulating rows. Never enable it against a database whose contents matter.
 /// </remarks>
 public class DemoDataSeeder
 {
@@ -93,26 +97,36 @@ public class DemoDataSeeder
     };
 
     private readonly BudgetDbContext _db;
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IOptions<List<Identity.SeedUser>> _householdUsers;
     private readonly ILogger<DemoDataSeeder> _logger;
 
-    public DemoDataSeeder(BudgetDbContext db, ILogger<DemoDataSeeder> logger)
+    public DemoDataSeeder(
+        BudgetDbContext db,
+        UserManager<ApplicationUser> userManager,
+        IOptions<List<Identity.SeedUser>> householdUsers,
+        ILogger<DemoDataSeeder> logger)
     {
         _db = db ?? throw new ArgumentNullException(nameof(db));
+        _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
+        _householdUsers = householdUsers ?? throw new ArgumentNullException(nameof(householdUsers));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    /// <summary>Deletes everything in the database, then rebuilds the household users and demo history.</summary>
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
-        if (await _db.Accounts.AnyAsync(a => a.Name == Checking, cancellationToken))
-        {
-            _logger.LogInformation("Demo data is already present; nothing seeded.");
-            return;
-        }
+        _logger.LogWarning("SeedDemoData is on: deleting all existing data before seeding the demo household.");
+        await DeleteEverythingAsync(cancellationToken);
+
+        // The wipe took the household users with it, so they come back before anything can be
+        // attributed to them.
+        await Identity.SeedUsersAsync(_userManager, _householdUsers.Value);
 
         var userIds = await _db.Users.OrderBy(u => u.UserName).Select(u => u.Id).ToListAsync(cancellationToken);
         if (userIds.Count == 0)
         {
-            _logger.LogWarning("No household users exist to attribute demo data to; nothing seeded.");
+            _logger.LogWarning("No household users are configured to attribute demo data to; nothing seeded.");
             return;
         }
 
@@ -127,6 +141,26 @@ public class DemoDataSeeder
         _logger.LogInformation(
             "Seeded demo data: {Accounts} accounts, {Categories} categories and {Months} months of budgets and transactions.",
             DemoAccounts.Length, DemoBudgets.Length, MonthsOfHistory);
+    }
+
+    /// <summary>
+    /// Ordered so that restricted foreign keys never block a delete: the rows that point at
+    /// something go before the thing they point at, and the users everything hangs off go last.
+    /// </summary>
+    private async Task DeleteEverythingAsync(CancellationToken cancellationToken)
+    {
+        await _db.Transactions.ExecuteDeleteAsync(cancellationToken);
+        await _db.Budgets.ExecuteDeleteAsync(cancellationToken);
+        await _db.Categories.ExecuteDeleteAsync(cancellationToken);
+        await _db.Accounts.ExecuteDeleteAsync(cancellationToken);
+
+        await _db.UserTokens.ExecuteDeleteAsync(cancellationToken);
+        await _db.UserLogins.ExecuteDeleteAsync(cancellationToken);
+        await _db.UserClaims.ExecuteDeleteAsync(cancellationToken);
+        await _db.UserRoles.ExecuteDeleteAsync(cancellationToken);
+        await _db.RoleClaims.ExecuteDeleteAsync(cancellationToken);
+        await _db.Roles.ExecuteDeleteAsync(cancellationToken);
+        await _db.Users.ExecuteDeleteAsync(cancellationToken);
     }
 
     private Dictionary<string, Accounts.Account> AddAccounts(string ownerUserId)

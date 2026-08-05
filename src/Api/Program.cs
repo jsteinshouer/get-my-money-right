@@ -65,8 +65,10 @@ app.UseAuthorization();
 
 app.MapFeatures();
 
-await app.SeedFeaturesAsync();
+// Demo mode owns the whole database — it wipes what's there and lays down the household users
+// itself — so it runs first and leaves the feature seeding below with nothing left to create.
 await app.SeedDemoDataAsync();
+await app.SeedFeaturesAsync();
 
 app.Run();
 

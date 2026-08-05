@@ -3,6 +3,8 @@ using Api.Data;
 using Api.Tests.Fixtures;
 using Microsoft.Extensions.DependencyInjection;
 using static Api.Features.Budgets.Budgets;
+using CategoriesFeature = Api.Features.Categories.Categories;
+using IdentityFeature = Api.Features.Identity.Identity;
 using TransactionsFeature = Api.Features.Transactions.Transactions;
 
 namespace Api.Tests.Data;
@@ -64,18 +66,39 @@ public class DemoDataSeederTests : IClassFixture<DemoDataApiFactory>
     }
 
     [Fact]
-    public async Task SeedingASecondTime_AddsNothing()
+    public async Task SeedingAgain_WipesWhatWasThereAndRebuildsTheSameDemoData()
     {
         var client = await LoggedInClientAsync();
         var before = await FetchTransactionsAsync(client);
+        var strayCategory = $"Stray Category {Guid.NewGuid()}";
+        (await client.PostAsJsonAsync("/api/categories", new CategoriesFeature.Create.Command(strayCategory)))
+            .EnsureSuccessStatusCode();
 
-        using (var scope = _factory.Services.CreateScope())
-        {
-            await scope.ServiceProvider.GetRequiredService<DemoDataSeeder>().SeedAsync();
-        }
+        await ReseedAsync();
 
-        var after = await FetchTransactionsAsync(client);
-        Assert.Equal(before.Count, after.Count);
+        // The wipe takes the users with it, so the old session is gone along with the old rows.
+        var reseededClient = await LoggedInClientAsync();
+        var categories = await reseededClient.GetFromJsonAsync<List<CategoriesFeature.FetchAll.Response>>("/api/categories");
+        Assert.DoesNotContain(categories!, category => category.Name == strayCategory);
+        Assert.Equal(before.Count, (await FetchTransactionsAsync(reseededClient)).Count);
+    }
+
+    [Fact]
+    public async Task SeedingAgain_LeavesTheHouseholdUsersAbleToLogIn()
+    {
+        await ReseedAsync();
+
+        var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync(
+            "/api/identity/login", new IdentityFeature.Login.Command(BudgetApiFactory.SeededUser2Email, BudgetApiFactory.SeededUser2Password));
+
+        response.EnsureSuccessStatusCode();
+    }
+
+    private async Task ReseedAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<DemoDataSeeder>().SeedAsync();
     }
 
     private async Task<HttpClient> LoggedInClientAsync()
