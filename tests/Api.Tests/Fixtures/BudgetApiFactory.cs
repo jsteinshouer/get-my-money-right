@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace Api.Tests.Fixtures;
 
@@ -22,8 +23,8 @@ public class BudgetApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public const string SeededUser2Email = "testuser2@household.local";
     public const string SeededUser2Password = "Test123!Password";
 
-    /// <summary>Off for every test but the seeder's own, so tests see only the rows they create.</summary>
-    protected virtual bool SeedDemoData => false;
+    /// <summary>Overridden by fixtures that need the app to believe it is deployed.</summary>
+    protected virtual string Environment => Environments.Development;
 
     public async Task InitializeAsync()
     {
@@ -33,6 +34,8 @@ public class BudgetApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseEnvironment(Environment);
+
         builder.ConfigureAppConfiguration((_, config) =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
@@ -45,7 +48,6 @@ public class BudgetApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 ["HouseholdUsers:1:Email"] = SeededUser2Email,
                 ["HouseholdUsers:1:Password"] = SeededUser2Password,
                 ["HouseholdUsers:1:DisplayName"] = "Test User Two",
-                ["SeedDemoData"] = SeedDemoData.ToString(),
             });
         });
 

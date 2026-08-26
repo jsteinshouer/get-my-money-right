@@ -1,122 +1,75 @@
-using Api.Features.Accounts;
-using Api.Features.Budgets;
-using Api.Features.Categories;
 using Api.Features.Identity;
-using Api.Features.Transactions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using AccountsFeature = Api.Features.Accounts.Accounts;
+using BudgetsFeature = Api.Features.Budgets.Budgets;
+using CategoriesFeature = Api.Features.Categories.Categories;
+using TransactionsFeature = Api.Features.Transactions.Transactions;
 
 namespace Api.Data;
 
 /// <summary>
 /// Resets a development database to a known demo state: everything already in it is deleted, then
-/// the configured household users are recreated along with a plausible three-month history —
+/// the configured household users are recreated along with <see cref="DemoHousehold"/>'s history of
 /// accounts, categories, monthly budgets and the transactions that spend against them.
 /// </summary>
 /// <remarks>
-/// Runs only when the <c>SeedDemoData</c> setting is true <i>and</i> the app is in Development, and
-/// <b>destroys all existing data</b> when it does, users included. Every start therefore lands on
-/// the same known state rather than accumulating rows. Never point it at a database that matters.
+/// <b>Destroys all existing data</b>, users included, so it never runs by itself — only when the
+/// <c>seed-demo-data</c> command is passed explicitly, and even then it refuses outside Development.
 /// </remarks>
 public class DemoDataSeeder
 {
-    private const string Checking = "Everyday Checking";
-    private const string Savings = "Household Savings";
-    private const string CreditCard = "Rewards Card";
-
-    private const string Groceries = "Groceries";
-    private const string DiningOut = "Dining Out";
-    private const string Utilities = "Utilities";
-    private const string Transport = "Transport";
-    private const string Entertainment = "Entertainment";
-    private const string HomeMaintenance = "Home Maintenance";
-
-    /// <summary>How many months of history to lay down, counting the current one.</summary>
-    private const int MonthsOfHistory = 3;
-
-    private static readonly (string Name, Accounts.AccountType Type)[] DemoAccounts =
-    [
-        (Checking, Accounts.AccountType.Checking),
-        (Savings, Accounts.AccountType.Savings),
-        (CreditCard, Accounts.AccountType.CreditCard),
-    ];
-
-    private static readonly (string Name, decimal MonthlyLimit)[] DemoBudgets =
-    [
-        (Groceries, 600.00m),
-        (DiningOut, 200.00m),
-        (Utilities, 250.00m),
-        (Transport, 180.00m),
-        (Entertainment, 120.00m),
-        (HomeMaintenance, 150.00m),
-    ];
-
-    /// <summary>Amounts are signed the way the app expects: negative is money out.</summary>
-    private record DemoTransaction(
-        string Category, string Account, int Day, decimal Amount, string Description, Transactions.NeedWant NeedWant);
-
-    /// <summary>The household's recurring shape, repeated in every seeded month.</summary>
-    private static readonly DemoTransaction[] EveryMonth =
-    [
-        new(Groceries, Checking, 3, -142.18m, "Weekly shop — Fresh Market", Transactions.NeedWant.Need),
-        new(Groceries, Checking, 10, -96.42m, "Weekly shop — Fresh Market", Transactions.NeedWant.Need),
-        new(Groceries, Checking, 17, -118.75m, "Weekly shop — Fresh Market", Transactions.NeedWant.Need),
-        new(Groceries, CreditCard, 24, -87.30m, "Corner store top-up", Transactions.NeedWant.Need),
-        new(DiningOut, CreditCard, 6, -54.20m, "Pizza night", Transactions.NeedWant.Want),
-        new(DiningOut, CreditCard, 14, -38.65m, "Coffee and brunch", Transactions.NeedWant.Want),
-        new(Utilities, Checking, 5, -128.40m, "Electric bill", Transactions.NeedWant.Need),
-        new(Utilities, Checking, 12, -64.75m, "Water and sewer", Transactions.NeedWant.Need),
-        new(Transport, CreditCard, 2, -48.90m, "Fuel", Transactions.NeedWant.Need),
-        new(Transport, CreditCard, 16, -52.10m, "Fuel", Transactions.NeedWant.Need),
-        new(Entertainment, CreditCard, 8, -15.99m, "Streaming subscription", Transactions.NeedWant.Want),
-        new(HomeMaintenance, Checking, 20, -74.25m, "Furnace filters and bulbs", Transactions.NeedWant.Need),
-    ];
-
-    /// <summary>
-    /// One-off spending, keyed by how many months back it lands, so the months don't look identical:
-    /// the current month runs Dining Out over its limit and carries a refund, and each earlier month
-    /// has its own overspend for month-over-month comparison to bite on.
-    /// </summary>
-    private static readonly Dictionary<int, DemoTransaction[]> ExtrasByMonthsAgo = new()
-    {
-        [0] =
-        [
-            new(DiningOut, CreditCard, 18, -132.75m, "Anniversary dinner", Transactions.NeedWant.Want),
-            new(Entertainment, CreditCard, 11, -22.50m, "Concert ticket", Transactions.NeedWant.Want),
-            new(Entertainment, CreditCard, 21, 22.50m, "Refund — cancelled concert", Transactions.NeedWant.Want),
-        ],
-        [1] =
-        [
-            new(HomeMaintenance, Checking, 9, -310.00m, "Plumber call-out", Transactions.NeedWant.Need),
-        ],
-        [2] =
-        [
-            new(Transport, CreditCard, 22, -220.00m, "Tyre replacement", Transactions.NeedWant.Need),
-        ],
-    };
+    /// <summary>The command-line argument that asks for a reset: <c>dotnet run -- seed-demo-data</c>.</summary>
+    public const string CommandName = "seed-demo-data";
 
     private readonly BudgetDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IOptions<List<Identity.SeedUser>> _householdUsers;
+    private readonly IHostEnvironment _environment;
     private readonly ILogger<DemoDataSeeder> _logger;
 
     public DemoDataSeeder(
         BudgetDbContext db,
         UserManager<ApplicationUser> userManager,
         IOptions<List<Identity.SeedUser>> householdUsers,
+        IHostEnvironment environment,
         ILogger<DemoDataSeeder> logger)
     {
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
         _householdUsers = householdUsers ?? throw new ArgumentNullException(nameof(householdUsers));
+        _environment = environment ?? throw new ArgumentNullException(nameof(environment));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <summary>Deletes everything in the database, then rebuilds the household users and demo history.</summary>
-    public async Task SeedAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Deletes everything in the database, then rebuilds the household users and demo history.
+    /// Outside Development this refuses and leaves the database untouched.
+    /// </summary>
+    /// <param name="today">
+    /// The date to treat as today; history runs back from here and stops here. Defaults to the real
+    /// today, and exists so a test can pin how far into the current month the seeding has got.
+    /// </param>
+    /// <returns>Whether the reset ran.</returns>
+    public async Task<bool> ResetToDemoStateAsync(DateOnly? today = null, CancellationToken cancellationToken = default)
     {
-        _logger.LogWarning("SeedDemoData is on: deleting all existing data before seeding the demo household.");
+        if (!_environment.IsDevelopment())
+        {
+            // Refused rather than obeyed: this destroys every row, and nothing outside a developer's
+            // own machine should be able to ask for that.
+            _logger.LogWarning(
+                "Demo data was requested but the environment is {Environment}, not Development; the database was left untouched.",
+                _environment.EnvironmentName);
+            return false;
+        }
+
+        _logger.LogWarning("Resetting to demo data: deleting all existing data first.");
+
+        // One transaction around the whole reset: a failure part-way through would otherwise leave a
+        // half-wiped database with no users in it, which is worse than either end state.
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+
         await DeleteEverythingAsync(cancellationToken);
 
         // The wipe took the household users with it, so they come back before anything can be
@@ -126,21 +79,24 @@ public class DemoDataSeeder
         var userIds = await _db.Users.OrderBy(u => u.UserName).Select(u => u.Id).ToListAsync(cancellationToken);
         if (userIds.Count == 0)
         {
-            _logger.LogWarning("No household users are configured to attribute demo data to; nothing seeded.");
-            return;
+            throw new InvalidOperationException(
+                "No household users are configured, so demo data has no one to be attributed to.");
         }
 
-        var accountIds = AddAccounts(userIds[0]);
-        var categoryIds = AddCategories(userIds[0]);
+        var accounts = AddAccounts(userIds[0]);
+        var categories = AddCategories(userIds[0]);
         // Budgets and transactions reference these by id, so they have to exist first.
         await _db.SaveChangesAsync(cancellationToken);
 
-        AddHistory(accountIds, categoryIds, userIds);
+        var seededSpends = AddHistory(accounts, categories, userIds, today ?? DateOnly.FromDateTime(DateTime.Today));
         await _db.SaveChangesAsync(cancellationToken);
 
+        await transaction.CommitAsync(cancellationToken);
+
         _logger.LogInformation(
-            "Seeded demo data: {Accounts} accounts, {Categories} categories and {Months} months of budgets and transactions.",
-            DemoAccounts.Length, DemoBudgets.Length, MonthsOfHistory);
+            "Seeded demo data: {Accounts} accounts, {Categories} categories, {Months} months of budgets and {Transactions} transactions.",
+            DemoHousehold.Accounts.Length, DemoHousehold.Budgets.Length, DemoHousehold.MonthsOfHistory, seededSpends);
+        return true;
     }
 
     /// <summary>
@@ -163,39 +119,40 @@ public class DemoDataSeeder
         await _db.Users.ExecuteDeleteAsync(cancellationToken);
     }
 
-    private Dictionary<string, Accounts.Account> AddAccounts(string ownerUserId)
+    private Dictionary<string, AccountsFeature.Account> AddAccounts(string ownerUserId)
     {
-        var accounts = DemoAccounts.ToDictionary(
+        var accounts = DemoHousehold.Accounts.ToDictionary(
             a => a.Name,
-            a => new Accounts.Account { Name = a.Name, Type = a.Type, CreatedByUserId = ownerUserId });
+            a => new AccountsFeature.Account { Name = a.Name, Type = a.Type, CreatedByUserId = ownerUserId });
         _db.Accounts.AddRange(accounts.Values);
         return accounts;
     }
 
-    private Dictionary<string, Categories.Category> AddCategories(string ownerUserId)
+    private Dictionary<string, CategoriesFeature.Category> AddCategories(string ownerUserId)
     {
-        var categories = DemoBudgets.ToDictionary(
+        var categories = DemoHousehold.Budgets.ToDictionary(
             b => b.Name,
-            b => new Categories.Category { Name = b.Name, CreatedByUserId = ownerUserId });
+            b => new CategoriesFeature.Category { Name = b.Name, CreatedByUserId = ownerUserId });
         _db.Categories.AddRange(categories.Values);
         return categories;
     }
 
-    private void AddHistory(
-        Dictionary<string, Accounts.Account> accounts,
-        Dictionary<string, Categories.Category> categories,
-        List<string> userIds)
+    /// <returns>How many transactions were added.</returns>
+    private int AddHistory(
+        Dictionary<string, AccountsFeature.Account> accounts,
+        Dictionary<string, CategoriesFeature.Category> categories,
+        List<string> userIds,
+        DateOnly today)
     {
-        var currentMonth = DateOnly.FromDateTime(DateTime.Today);
         var enteredBy = 0;
 
-        for (var monthsAgo = 0; monthsAgo < MonthsOfHistory; monthsAgo++)
+        for (var monthsAgo = 0; monthsAgo < DemoHousehold.MonthsOfHistory; monthsAgo++)
         {
-            var month = currentMonth.AddMonths(-monthsAgo);
+            var month = today.AddMonths(-monthsAgo);
 
-            foreach (var (name, monthlyLimit) in DemoBudgets)
+            foreach (var (name, monthlyLimit) in DemoHousehold.Budgets)
             {
-                _db.Budgets.Add(new Budgets.Budget
+                _db.Budgets.Add(new BudgetsFeature.Budget
                 {
                     CategoryId = categories[name].Id,
                     Year = month.Year,
@@ -204,22 +161,28 @@ public class DemoDataSeeder
                 });
             }
 
-            var extras = ExtrasByMonthsAgo.GetValueOrDefault(monthsAgo, []);
-            foreach (var demo in EveryMonth.Concat(extras))
+            foreach (var spend in DemoHousehold.ForMonthsAgo(monthsAgo))
             {
-                _db.Transactions.Add(new Transactions.Transaction
+                var date = new DateOnly(month.Year, month.Month, spend.Day);
+                // The current month is only as far along as today is; a household hasn't yet spent
+                // money it will spend later this month.
+                if (date > today) { continue; }
+
+                _db.Transactions.Add(new TransactionsFeature.Transaction
                 {
-                    AccountId = accounts[demo.Account].Id,
-                    CategoryId = categories[demo.Category].Id,
-                    Date = new DateOnly(month.Year, month.Month, demo.Day),
-                    Amount = demo.Amount,
-                    Description = demo.Description,
-                    NeedWant = demo.NeedWant,
+                    AccountId = accounts[spend.Account].Id,
+                    CategoryId = categories[spend.Category].Id,
+                    Date = date,
+                    Amount = spend.Amount,
+                    Description = spend.Description,
+                    NeedWant = spend.NeedWant,
                     // Alternate the two household members so "who entered what" has something to show.
                     CreatedByUserId = userIds[enteredBy++ % userIds.Count],
                 });
             }
         }
+
+        return enteredBy;
     }
 }
 
@@ -229,27 +192,19 @@ public static class DemoDataSeederExtensions
         .AddScoped<DemoDataSeeder>();
 
     /// <summary>
-    /// Resets the database to the demo state if the <c>SeedDemoData</c> setting is on and the app is
-    /// running in Development; otherwise does nothing.
+    /// Runs the <c>seed-demo-data</c> command if it was asked for, so the caller can exit instead of
+    /// serving. Resetting the database is never a side effect of an ordinary start.
     /// </summary>
-    public static async Task SeedDemoDataAsync(this WebApplication app)
+    /// <returns>Whether the command was handled.</returns>
+    public static async Task<bool> TryRunDemoDataCommandAsync(this WebApplication app, string[] args)
     {
-        if (!app.Configuration.GetValue<bool>("SeedDemoData"))
+        if (!args.Contains(DemoDataSeeder.CommandName))
         {
-            return;
-        }
-
-        if (!app.Environment.IsDevelopment())
-        {
-            // Refused rather than obeyed: this setting destroys every row, and nothing outside a
-            // developer's own machine should be able to ask for that by flipping a flag.
-            app.Logger.LogWarning(
-                "SeedDemoData is on but the environment is {Environment}, not Development; the database was left untouched.",
-                app.Environment.EnvironmentName);
-            return;
+            return false;
         }
 
         using var scope = app.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<DemoDataSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<DemoDataSeeder>().ResetToDemoStateAsync();
+        return true;
     }
 }

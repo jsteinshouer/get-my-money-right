@@ -57,6 +57,12 @@ using (var scope = app.Services.CreateScope())
     await scope.ServiceProvider.GetRequiredService<BudgetDbContext>().Database.MigrateAsync();
 }
 
+// `dotnet run -- seed-demo-data` resets the database and exits rather than serving.
+if (await app.TryRunDemoDataCommandAsync(args))
+{
+    return;
+}
+
 app.UseExceptionMapper();
 
 // Plain-HTTP LAN deployment: no HTTPS redirection/HSTS.
@@ -65,9 +71,6 @@ app.UseAuthorization();
 
 app.MapFeatures();
 
-// Demo mode owns the whole database — it wipes what's there and lays down the household users
-// itself — so it runs first and leaves the feature seeding below with nothing left to create.
-await app.SeedDemoDataAsync();
 await app.SeedFeaturesAsync();
 
 app.Run();

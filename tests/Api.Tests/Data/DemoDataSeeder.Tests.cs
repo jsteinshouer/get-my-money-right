@@ -1,59 +1,36 @@
 using System.Net.Http.Json;
 using Api.Data;
 using Api.Tests.Fixtures;
-using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using static Api.Features.Budgets.Budgets;
-using AccountsFeature = Api.Features.Accounts.Accounts;
 using CategoriesFeature = Api.Features.Categories.Categories;
-using IdentityFeature = Api.Features.Identity.Identity;
 using TransactionsFeature = Api.Features.Transactions.Transactions;
 
 namespace Api.Tests.Data;
 
-/// <summary>The only factory that turns demo seeding on; every other test suite runs without it.</summary>
-public class DemoDataApiFactory : BudgetApiFactory
+public class DemoDataSeederTests : IClassFixture<BudgetApiFactory>
 {
-    protected override bool SeedDemoData => true;
+    /// <summary>
+    /// Pinned, and deliberately mid-month: the demo history runs to day 24, so seeding "as at" the
+    /// 10th leaves part of the month in the future and every month boundary is stated, not inferred.
+    /// </summary>
+    private static readonly DateOnly Today = new(2026, 3, 10);
 
-    protected override void ConfigureWebHost(IWebHostBuilder builder)
-    {
-        // The seeder refuses to run outside Development, so the host has to say it is Development.
-        builder.UseEnvironment(Environments.Development);
-        base.ConfigureWebHost(builder);
-    }
-}
+    private readonly BudgetApiFactory _factory;
 
-/// <summary>Asks for demo seeding from a non-Development environment, where it must be refused.</summary>
-public class ProductionDemoDataApiFactory : BudgetApiFactory
-{
-    protected override bool SeedDemoData => true;
-
-    protected override void ConfigureWebHost(IWebHostBuilder builder)
-    {
-        builder.UseEnvironment(Environments.Production);
-        base.ConfigureWebHost(builder);
-    }
-}
-
-public class DemoDataSeederTests : IClassFixture<DemoDataApiFactory>
-{
-    private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.Today);
-
-    private readonly DemoDataApiFactory _factory;
-
-    public DemoDataSeederTests(DemoDataApiFactory factory)
+    public DemoDataSeederTests(BudgetApiFactory factory)
     {
         _factory = factory;
     }
 
     [Fact]
-    public async Task SeededCurrentMonth_HasRealSpendAgainstEveryBudgetedCategory()
+    public async Task Reset_SeedsSpendAgainstEveryBudgetedCategory()
     {
-        var client = await LoggedInClientAsync();
+        var client = await ResetAndLogInAsync();
 
-        var budgets = await FetchBudgetsAsync(client, Today);
+        // The most recent complete month: the current one is only seeded as far as today.
+        var budgets = await FetchBudgetsAsync(client, Today.AddMonths(-1));
 
         Assert.NotEmpty(budgets);
         Assert.All(budgets, budget => Assert.True(budget.Amount > 0, $"category {budget.CategoryId} has no limit"));
@@ -61,73 +38,112 @@ public class DemoDataSeederTests : IClassFixture<DemoDataApiFactory>
     }
 
     [Fact]
-    public async Task SeededCurrentMonth_IncludesAnOverspentCategory()
+    public async Task Reset_IncludesAnOverspentCategory()
     {
-        var client = await LoggedInClientAsync();
+        var client = await ResetAndLogInAsync();
 
-        var budgets = await FetchBudgetsAsync(client, Today);
+        var budgets = await FetchBudgetsAsync(client, Today.AddMonths(-1));
 
         Assert.Contains(budgets, budget => budget.Actual > budget.Amount);
     }
 
     [Fact]
-    public async Task SeededHistory_CoversEarlierMonthsSoMonthsCanBeCompared()
+    public async Task Reset_CoversEarlierMonthsSoMonthsCanBeCompared()
     {
-        var client = await LoggedInClientAsync();
+        var client = await ResetAndLogInAsync();
 
-        var thisMonth = await FetchBudgetsAsync(client, Today);
         var lastMonth = await FetchBudgetsAsync(client, Today.AddMonths(-1));
         var monthBefore = await FetchBudgetsAsync(client, Today.AddMonths(-2));
 
-        Assert.Equal(thisMonth.Count, lastMonth.Count);
-        Assert.Equal(thisMonth.Count, monthBefore.Count);
-        Assert.All(lastMonth, budget => Assert.True(budget.Actual > 0));
+        Assert.Equal(lastMonth.Count, monthBefore.Count);
         Assert.All(monthBefore, budget => Assert.True(budget.Actual > 0));
         // Identical months would make a trend report meaningless.
-        Assert.NotEqual(thisMonth.Sum(b => b.Actual), lastMonth.Sum(b => b.Actual));
+        Assert.NotEqual(lastMonth.Sum(b => b.Actual), monthBefore.Sum(b => b.Actual));
     }
 
     [Fact]
-    public async Task SeedingAgain_WipesWhatWasThereAndRebuildsTheSameDemoData()
+    public async Task Reset_SeedsNoSpendDatedInTheFuture()
     {
-        var client = await LoggedInClientAsync();
-        var before = await FetchTransactionsAsync(client);
+        var client = await ResetAndLogInAsync();
+
+        var transactions = await FetchTransactionsAsync(client);
+
+        Assert.NotEmpty(transactions);
+        Assert.All(transactions, transaction => Assert.True(
+            transaction.Date <= Today, $"transaction {transaction.Id} is dated {transaction.Date}, in the future"));
+        // The clock is mid-month, so the current month must be genuinely truncated rather than
+        // trivially satisfied by a date that happens to be past the end of the demo history.
+        var currentMonth = transactions.Where(t => t.Date.Year == Today.Year && t.Date.Month == Today.Month).ToList();
+        Assert.NotEmpty(currentMonth);
+        Assert.True(currentMonth.Count < transactions.Count(t => t.Date.Month == Today.AddMonths(-1).Month),
+            "the current month should hold less spend than a complete month");
+    }
+
+    [Fact]
+    public async Task Reset_DeletesDataThatWasAlreadyThere()
+    {
+        var client = await ResetAndLogInAsync();
         var strayCategory = $"Stray Category {Guid.NewGuid()}";
         (await client.PostAsJsonAsync("/api/categories", new CategoriesFeature.Create.Command(strayCategory)))
             .EnsureSuccessStatusCode();
 
-        await ReseedAsync();
+        var reseededClient = await ResetAndLogInAsync();
 
-        // The wipe takes the users with it, so the old session is gone along with the old rows.
-        var reseededClient = await LoggedInClientAsync();
         var categories = await reseededClient.GetFromJsonAsync<List<CategoriesFeature.FetchAll.Response>>("/api/categories");
         Assert.DoesNotContain(categories!, category => category.Name == strayCategory);
-        Assert.Equal(before.Count, (await FetchTransactionsAsync(reseededClient)).Count);
     }
 
     [Fact]
-    public async Task SeedingAgain_LeavesTheHouseholdUsersAbleToLogIn()
+    public async Task Reset_DeletesUsersThatWereAlreadyThere()
     {
-        await ReseedAsync();
+        await ResetAsync();
+        var strayEmail = $"stray-{Guid.NewGuid():N}@household.local";
+        await CreateUserAsync(strayEmail);
+
+        await ResetAsync();
+
+        Assert.Null(await FindUserAsync(strayEmail));
+    }
+
+    [Fact]
+    public async Task Reset_LeavesTheHouseholdUsersAbleToLogIn()
+    {
+        await ResetAsync();
 
         var client = _factory.CreateClient();
-        var response = await client.PostAsJsonAsync(
-            "/api/identity/login", new IdentityFeature.Login.Command(BudgetApiFactory.SeededUser2Email, BudgetApiFactory.SeededUser2Password));
-
-        response.EnsureSuccessStatusCode();
+        // The second user, so this can't pass on the strength of the first one alone.
+        await client.LoginAsync(BudgetApiFactory.SeededUser2Email, BudgetApiFactory.SeededUser2Password);
     }
 
-    private async Task ReseedAsync()
+    private async Task ResetAsync()
     {
         using var scope = _factory.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<DemoDataSeeder>().SeedAsync();
+        // Driven through DI rather than HTTP: resetting the database has no endpoint by design.
+        Assert.True(await scope.ServiceProvider.GetRequiredService<DemoDataSeeder>().ResetToDemoStateAsync(Today));
     }
 
-    private async Task<HttpClient> LoggedInClientAsync()
+    private async Task<HttpClient> ResetAndLogInAsync()
     {
+        await ResetAsync();
         var client = _factory.CreateClient();
         await client.LoginAsync(BudgetApiFactory.SeededUser1Email, BudgetApiFactory.SeededUser1Password);
         return client;
+    }
+
+    private async Task CreateUserAsync(string email)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var result = await userManager.CreateAsync(
+            new ApplicationUser { UserName = email, Email = email, EmailConfirmed = true, DisplayName = "Stray" },
+            "Stray123!Password");
+        Assert.True(result.Succeeded);
+    }
+
+    private async Task<ApplicationUser?> FindUserAsync(string email)
+    {
+        using var scope = _factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>().FindByEmailAsync(email);
     }
 
     private static async Task<List<FetchForMonth.Response>> FetchBudgetsAsync(HttpClient client, DateOnly month) =>
@@ -138,27 +154,31 @@ public class DemoDataSeederTests : IClassFixture<DemoDataApiFactory>
             "/api/transactions", TestClientExtensions.JsonOptions))!;
 }
 
-public class DemoDataSeederOutsideDevelopmentTests : IClassFixture<ProductionDemoDataApiFactory>
+public class DemoDataSeederOutsideDevelopmentTests : IClassFixture<DeployedEnvironmentApiFactory>
 {
-    private readonly ProductionDemoDataApiFactory _factory;
+    private readonly DeployedEnvironmentApiFactory _factory;
 
-    public DemoDataSeederOutsideDevelopmentTests(ProductionDemoDataApiFactory factory)
+    public DemoDataSeederOutsideDevelopmentTests(DeployedEnvironmentApiFactory factory)
     {
         _factory = factory;
     }
 
     [Fact]
-    public async Task SeedDemoDataOutsideDevelopment_IsRefusedAndLeavesTheDatabaseEmpty()
+    public async Task Reset_OutsideDevelopment_IsRefusedAndLeavesTheDataAlone()
     {
         var client = _factory.CreateClient();
-        // The household users still seed the ordinary way, so there is a session to look with.
         await client.LoginAsync(BudgetApiFactory.SeededUser1Email, BudgetApiFactory.SeededUser1Password);
+        var realCategory = $"Real Category {Guid.NewGuid()}";
+        (await client.PostAsJsonAsync("/api/categories", new CategoriesFeature.Create.Command(realCategory)))
+            .EnsureSuccessStatusCode();
 
+        using var scope = _factory.Services.CreateScope();
+        var ran = await scope.ServiceProvider.GetRequiredService<DemoDataSeeder>().ResetToDemoStateAsync();
+
+        Assert.False(ran);
         var categories = await client.GetFromJsonAsync<List<CategoriesFeature.FetchAll.Response>>("/api/categories");
-        var accounts = await client.GetFromJsonAsync<List<AccountsFeature.FetchAll.Response>>(
-            "/api/accounts", TestClientExtensions.JsonOptions);
-
-        Assert.Empty(categories!);
-        Assert.Empty(accounts!);
+        // Still logged in, still holding the row that was there — nothing was wiped or seeded.
+        Assert.Contains(categories!, category => category.Name == realCategory);
+        Assert.DoesNotContain(categories!, category => category.Name == DemoHousehold.Groceries);
     }
 }
