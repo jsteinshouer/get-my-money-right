@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { budgetsApi, type BudgetInput, type BudgetWithActual } from '../api/budgets'
 import { categoriesApi, type Category } from '../api/categories'
 import { ApiError } from '../api/client'
@@ -14,12 +15,10 @@ function parseMonthValue(monthValue: string): { year: number; month: number } {
   return { year, month }
 }
 
-/** "40.00 left" while under the limit, "40.00 over" once actual spend passes it. */
-function remainingLabel(budget: BudgetWithActual) {
-  const remaining = budget.amount - budget.actual
-  return remaining < 0 ? `${Math.abs(remaining).toFixed(2)} over` : `${remaining.toFixed(2)} left`
-}
-
+/**
+ * Budget *management*: what the limits are, and changing them. How spending is
+ * running against them is the ledger spread's job, on This month.
+ */
 export function BudgetsPage() {
   const [monthValue, setMonthValue] = useState(currentMonthValue())
   const [budgets, setBudgets] = useState<BudgetWithActual[] | null>(null)
@@ -112,10 +111,14 @@ export function BudgetsPage() {
   return (
     <>
       <h1>Budgets</h1>
+      <p style={{ color: 'var(--ink-2)', marginTop: 'var(--gap-2)' }}>
+        The monthly limit for each category. To see how spending is running against these, open{' '}
+        <Link to="/">This month</Link>.
+      </p>
 
       {error && <p role="alert">{error}</p>}
 
-      <label htmlFor="budget-month">
+      <label htmlFor="budget-month" style={{ maxWidth: '14rem', marginTop: 'var(--gap-5)' }}>
         Month
         <input id="budget-month" type="month" value={monthValue} onChange={(e) => setMonthValue(e.target.value)} />
       </label>
@@ -129,10 +132,7 @@ export function BudgetsPage() {
           <thead>
             <tr>
               <th scope="col">Category</th>
-              <th scope="col">Monthly limit</th>
-              <th scope="col">Actual</th>
-              <th scope="col">Remaining</th>
-              <th scope="col">Progress</th>
+              <th scope="col" className="money">Monthly limit</th>
               <th scope="col">Actions</th>
             </tr>
           </thead>
@@ -150,8 +150,7 @@ export function BudgetsPage() {
               ) : (
                 <tr key={budget.id}>
                   <td>{categoryName(budget.categoryId)}</td>
-                  <td>{budget.amount.toFixed(2)}</td>
-                  <ActualCells budget={budget} categoryLabel={categoryName(budget.categoryId)} />
+                  <td className="money">{budget.amount.toFixed(2)}</td>
                   <td>
                     <button className="secondary" onClick={() => setEditingId(budget.id)}>
                       Edit
@@ -203,25 +202,6 @@ export function BudgetsPage() {
   )
 }
 
-/** The actual-vs-limit half of a budget row — identical whether or not the row is being edited. */
-function ActualCells({ budget, categoryLabel }: { budget: BudgetWithActual; categoryLabel: string }) {
-  // A refunded-into category can go negative; the bar floors at empty and caps at full.
-  const clamped = Math.min(Math.max(budget.actual, 0), budget.amount)
-  return (
-    <>
-      <td>{budget.actual.toFixed(2)}</td>
-      <td>{remainingLabel(budget)}</td>
-      <td>
-        <progress
-          value={clamped}
-          max={budget.amount}
-          aria-label={`${categoryLabel}: ${budget.actual.toFixed(2)} of ${budget.amount.toFixed(2)} spent`}
-        />
-      </td>
-    </>
-  )
-}
-
 function EditRow({
   budget,
   categoryLabel,
@@ -255,10 +235,9 @@ function EditRow({
   return (
     <tr>
       <td>{categoryLabel}</td>
-      <td>
+      <td className="money">
         <input aria-label="Monthly limit" type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
       </td>
-      <ActualCells budget={budget} categoryLabel={categoryLabel} />
       <td>
         <button aria-busy={saving} disabled={saving} onClick={() => void handleSave()}>
           Save

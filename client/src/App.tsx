@@ -3,7 +3,7 @@ import { AuthProvider } from './auth/AuthContext'
 import { RequireAuth } from './auth/RequireAuth'
 import { AppLayout } from './components/AppLayout'
 import { LoginPage } from './pages/LoginPage'
-import { ShellPage } from './pages/ShellPage'
+import { StatusPage } from './pages/StatusPage'
 import { AccountsPage } from './pages/AccountsPage'
 import { BudgetsPage } from './pages/BudgetsPage'
 import { CategoriesPage } from './pages/CategoriesPage'
@@ -22,7 +22,7 @@ function App() {
               </RequireAuth>
             }
           >
-            <Route path="/" element={<ShellPage />} />
+            <Route path="/" element={<StatusPage />} />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
             <Route path="/transactions" element={<TransactionsPage />} />

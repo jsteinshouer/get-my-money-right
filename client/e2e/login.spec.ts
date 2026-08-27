@@ -16,8 +16,10 @@ for (const user of seededUsers) {
     await page.getByRole('button', { name: 'Log in' }).click()
 
     await expect(page).toHaveURL('http://localhost:5173/')
-    await expect(page.getByRole('heading', { name: `Welcome, ${user.displayName}` })).toBeVisible()
-    await expect(page.getByText(`Signed in as ${user.displayName}`)).toBeVisible()
+    await expect(page.getByRole('link', { name: 'MoneyRight' })).toBeVisible()
+    await expect(page.getByText(user.displayName)).toBeVisible()
+    // The spread is the authenticated landing surface, not a welcome message.
+    await expect(page.locator('.spread-month')).toBeVisible()
   })
 }
 
@@ -32,7 +34,7 @@ test('logging out returns to the login page', async ({ page }) => {
   await page.getByLabel('Email').fill(user.email)
   await page.getByLabel('Password').fill(user.password)
   await page.getByRole('button', { name: 'Log in' }).click()
-  await expect(page.getByRole('heading', { name: `Welcome, ${user.displayName}` })).toBeVisible()
+  await expect(page.getByText(user.displayName)).toBeVisible()
 
   await page.getByRole('button', { name: 'Log out' }).click()
 

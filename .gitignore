@@ -25,3 +25,7 @@ client/playwright/.cache/
 
 # OS
 .DS_Store
+
+# Impeccable — machine-local session state (surface briefs are committed)
+.impeccable/config.local.json
+.impeccable/questions/

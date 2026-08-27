@@ -30,11 +30,12 @@ export function LoginPage() {
 
   return (
     <main className="container">
-      <article style={{ maxWidth: '28rem', marginInline: 'auto' }}>
-        <hgroup>
-          <h1>Household Budget</h1>
-          <p>Sign in to continue</p>
-        </hgroup>
+      <div className="slip">
+        <div className="slip-mark">
+          Money<span>Right</span>
+        </div>
+        <div className="slip-rule" />
+        <p className="colhead">Household budget · sign in to continue</p>
         <form onSubmit={handleSubmit}>
           <label htmlFor="email">
             Email
@@ -58,16 +59,12 @@ export function LoginPage() {
               required
             />
           </label>
-          {error && (
-            <p role="alert" style={{ color: 'var(--pico-form-element-invalid-active-border-color)' }}>
-              {error}
-            </p>
-          )}
+          {error && <p role="alert">{error}</p>}
           <button type="submit" aria-busy={submitting} disabled={submitting}>
             Log in
           </button>
         </form>
-      </article>
+      </div>
     </main>
   )
 }

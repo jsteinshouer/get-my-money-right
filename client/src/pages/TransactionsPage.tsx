@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { accountsApi, type Account } from '../api/accounts'
 import { ApiError } from '../api/client'
 import { categoriesApi, type Category } from '../api/categories'
@@ -23,11 +24,22 @@ export function TransactionsPage() {
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
 
-  const [filterAccountId, setFilterAccountId] = useState<number | ''>('')
-  const [filterCategoryId, setFilterCategoryId] = useState<number | ''>('')
-  const [filterDateFrom, setFilterDateFrom] = useState('')
-  const [filterDateTo, setFilterDateTo] = useState('')
-  const [filterNeedWant, setFilterNeedWant] = useState<NeedWant | ''>('')
+  // The ledger spread links here with a category and month already chosen, so the
+  // filters start from the URL rather than empty.
+  const [searchParams] = useSearchParams()
+  const numberParam = (key: string): number | '' => {
+    const raw = Number(searchParams.get(key))
+    return Number.isInteger(raw) && raw > 0 ? raw : ''
+  }
+
+  const [filterAccountId, setFilterAccountId] = useState<number | ''>(() => numberParam('accountId'))
+  const [filterCategoryId, setFilterCategoryId] = useState<number | ''>(() => numberParam('categoryId'))
+  const [filterDateFrom, setFilterDateFrom] = useState(() => searchParams.get('dateFrom') ?? '')
+  const [filterDateTo, setFilterDateTo] = useState(() => searchParams.get('dateTo') ?? '')
+  const [filterNeedWant, setFilterNeedWant] = useState<NeedWant | ''>(() => {
+    const raw = searchParams.get('needWant')
+    return raw === 'Need' || raw === 'Want' ? raw : ''
+  })
 
   const [form, setForm] = useState(emptyForm)
   const [adding, setAdding] = useState(false)

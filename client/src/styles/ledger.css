@@ -1,0 +1,446 @@
+/* ==========================================================================
+   The ledger spread — MoneyRight's status surface.
+   Every figure sits in a ruled column, and the rule beneath an entry is the
+   gauge: an ink segment for what was spent, an oxblood tick for where the
+   month says you should be today. Nothing is a progress bar bolted on top.
+   ========================================================================== */
+
+.spread { max-width: var(--shell); margin-inline: auto; }
+
+/* --- head band: the month and how far into it we are ---------------------- */
+
+.spread-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap-3) var(--gap-4);
+  padding-bottom: var(--gap-2);
+  border-bottom: 1.5px solid var(--ink);
+}
+
+.spread-month {
+  font-size: 0.86rem;
+  font-weight: 700;
+  font-stretch: 88%;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.spread-elapsed {
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.spread-nav { display: flex; gap: var(--gap-2); }
+.spread-nav button { font-size: 0.68rem; padding: 0.34rem 0.7rem; }
+
+/* --- the closing figure --------------------------------------------------- */
+
+.headline {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: var(--gap-5) var(--gap-6);
+  align-items: start;
+  padding-block: var(--gap-5) var(--gap-4);
+}
+
+.headline-figure {
+  font-size: clamp(2.6rem, 1.6rem + 4.4vw, 4.1rem);
+  font-weight: 700;
+  letter-spacing: -0.032em;
+  line-height: 0.95;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.headline-of {
+  margin-top: var(--gap-3);
+  font-size: 0.9rem;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.headline-of strong { font-weight: 650; color: var(--ink); }
+
+/* The closing rule: doubled, as it is under every figure a ledger closes. */
+.headline-close {
+  margin-top: var(--gap-3);
+  border-top: 1px solid var(--ink);
+  border-bottom: 3px double var(--ink);
+  height: 5px;
+  max-width: 15rem;
+}
+
+/* --- exceptions: entries in the ledger, never floating badges ------------- */
+
+.exceptions {
+  border: 1px solid var(--rule-strong);
+  background: var(--paper-field);
+}
+
+.exception {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap-4);
+  padding: var(--gap-2) var(--gap-4) var(--gap-3);
+  border-bottom: 1px solid var(--rule-hair);
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: none;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.exception:last-child { border-bottom: 0; }
+
+a.exception:hover { background: var(--paper-sunk); text-decoration: none; }
+
+.exception-label {
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.exception-count {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums lining-nums;
+  line-height: 1;
+}
+
+.exception[data-flagged='true'] .exception-count,
+.exception[data-flagged='true'] .exception-label { color: var(--signal); }
+
+.exception-note { font-size: 0.8rem; color: var(--ink-2); }
+
+/* --- section rules -------------------------------------------------------- */
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap-4);
+  margin-top: var(--gap-6);
+  padding-bottom: var(--gap-2);
+  border-bottom: 1.5px solid var(--rule-strong);
+}
+
+.section-head h2 {
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* --- column heads --------------------------------------------------------- */
+
+.entry-columns {
+  display: grid;
+  grid-template-columns: var(--entry-cols);
+  gap: var(--gap-4);
+  padding: var(--gap-2) 0;
+}
+
+.entry-columns span:not(:first-child) { text-align: right; }
+
+/* --- one ruled entry ------------------------------------------------------ */
+
+.entries { --entry-cols: minmax(0, 1fr) 6.5rem 8.5rem 7rem; }
+.entries.is-past { --entry-cols: minmax(0, 1fr) 6.5rem 7rem; }
+.entries.is-unbudgeted { --entry-cols: minmax(0, 1fr) 7rem; }
+
+.entry { display: block; padding-block: var(--gap-3) 0; }
+
+a.entry { text-decoration: none; color: inherit; }
+a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: var(--signal); }
+
+.entry-line {
+  display: grid;
+  grid-template-columns: var(--entry-cols);
+  gap: var(--gap-4);
+  align-items: baseline;
+}
+
+.entry-name {
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+
+.entry-figure {
+  text-align: right;
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--ink-2);
+}
+
+.entry-figure.is-actual { color: var(--ink); font-weight: 650; font-size: 1.06rem; }
+
+/* Over the limit is said in words, in the margin — never by tinting the row. */
+.entry-mark {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  font-stretch: 86%;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--signal);
+  margin-top: 0.15rem;
+}
+
+.entry-relation {
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  margin-top: var(--gap-1);
+  text-align: right;
+}
+
+.entry-relation[data-over='true'] .entry-remaining {
+  color: var(--signal);
+  font-weight: 650;
+}
+
+/* The tick already carries pace where the columns are visible. */
+.entry-pace { display: none; }
+
+/* --- the rule that is the gauge ------------------------------------------- */
+
+.gauge {
+  position: relative;
+  height: 3px;
+  margin-top: var(--gap-3);
+  background: var(--rule-hair);
+}
+
+.gauge-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--spent, 0%);
+  background: var(--ink-2);
+  transition: width 520ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gauge[data-over='true'] .gauge-fill {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--signal) 0 2px,
+    var(--signal-soft) 2px 5px
+  );
+}
+
+/* Where the month says you should be today. Current month only. */
+.gauge-tick {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: var(--expected, 0%);
+  width: 1.5px;
+  background: var(--signal);
+}
+
+.gauge-tick::after {
+  content: '';
+  position: absolute;
+  inset: 0 -5px;
+}
+
+/* --- need / want ---------------------------------------------------------- */
+
+.needwant { margin-top: var(--gap-3); }
+
+.needwant-bar {
+  display: flex;
+  height: 10px;
+  border: 1px solid var(--ink);
+}
+
+.needwant-need { background: var(--ink-2); }
+.needwant-want {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--ink-3) 0 1.5px,
+    var(--paper-field) 1.5px 5px
+  );
+}
+
+.needwant-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2) var(--gap-5);
+  margin-top: var(--gap-3);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.needwant-key div { font-size: 0.86rem; color: var(--ink-2); }
+.needwant-key strong { color: var(--ink); font-weight: 650; }
+
+/* --- memoranda and empties ------------------------------------------------ */
+
+.memo {
+  margin-top: var(--gap-4);
+  padding-left: var(--gap-4);
+  border-left: 1px solid var(--rule-strong);
+  color: var(--ink-2);
+  font-size: 0.9rem;
+  max-width: var(--measure);
+}
+
+.memo strong { color: var(--ink); font-weight: 650; }
+
+.empty {
+  margin-top: var(--gap-4);
+  padding: var(--gap-5);
+  border: 1px dashed var(--rule-strong);
+  background: var(--paper-field);
+  color: var(--ink-2);
+  max-width: var(--measure);
+}
+
+.empty h3 { margin-bottom: var(--gap-2); font-size: 1.02rem; }
+.empty p { margin-bottom: var(--gap-4); }
+
+/* --- the one authored moment: the spread turning -------------------------- */
+
+@keyframes spread-turn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.spread-body { animation: spread-turn 420ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* --- narrow: sections separate by real void, not by rule alone ------------ */
+
+@media (max-width: 46rem) {
+  .headline { grid-template-columns: 1fr; gap: var(--gap-5); }
+
+  .entries,
+  .entries.is-past,
+  .entries.is-unbudgeted { --entry-cols: minmax(0, 1fr) auto; }
+
+  .entry-columns { display: none; }
+  .entry { padding-top: var(--gap-4); }
+  .entry-figure:not(.is-actual) { display: none; }
+  .entry-relation { text-align: left; }
+  .entry-pace { display: inline; }
+
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--gap-1);
+    margin-top: var(--gap-6);
+  }
+  .spread-head { gap: var(--gap-2); }
+  .spread-nav { width: 100%; justify-content: space-between; }
+}
+
+/* --- masthead: the book's spine ------------------------------------------- */
+
+.masthead {
+  background: var(--paper-field);
+  border-bottom: 1px solid var(--ink);
+  box-shadow: 0 3px 0 -1px var(--paper-field), 0 4px 0 -1px var(--ink);
+}
+
+.masthead-inner {
+  max-width: var(--shell);
+  margin-inline: auto;
+  padding: var(--gap-4) var(--gap-5);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--gap-3) var(--gap-5);
+}
+
+.wordmark {
+  font-size: 1.12rem;
+  font-weight: 800;
+  font-stretch: 92%;
+  letter-spacing: -0.026em;
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.wordmark:hover { text-decoration: none; color: var(--signal); }
+.wordmark span { color: var(--signal); }
+
+.masthead nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2) var(--gap-4);
+  margin-right: auto;
+}
+
+.masthead nav a {
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  text-decoration: none;
+  padding-bottom: 2px;
+  border-bottom: 2px solid transparent;
+}
+
+.masthead nav a:hover { color: var(--ink); border-bottom-color: var(--rule-strong); }
+.masthead nav a.active { color: var(--ink); border-bottom-color: var(--signal); }
+
+.masthead-user {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-3);
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.masthead-user button { font-size: 0.66rem; padding: 0.3rem 0.6rem; }
+
+@media (max-width: 46rem) {
+  .masthead-inner { gap: var(--gap-3); }
+  .masthead nav { order: 3; width: 100%; margin-right: 0; }
+  .masthead-user { margin-left: auto; }
+}
+
+/* --- login: a single ruled slip ------------------------------------------- */
+
+.slip {
+  max-width: 24rem;
+  margin: clamp(2rem, 12vh, 6rem) auto 0;
+}
+
+.slip-mark {
+  font-size: 1.9rem;
+  font-weight: 800;
+  font-stretch: 92%;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.slip-mark span { color: var(--signal); }
+
+.slip-rule {
+  margin-block: var(--gap-3) var(--gap-5);
+  border-top: 1px solid var(--ink);
+  border-bottom: 3px double var(--ink);
+  height: 5px;
+}
+
+.slip form { margin-top: var(--gap-5); }
+.slip button[type='submit'] { width: 100%; }
