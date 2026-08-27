@@ -24,9 +24,14 @@ public static partial class Identity
     public static async Task SeedIdentityAsync(this WebApplication app)
     {
         using var scope = app.Services.CreateScope();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        var seedUsers = scope.ServiceProvider.GetRequiredService<IOptions<List<SeedUser>>>().Value;
+        await SeedUsersAsync(
+            scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>(),
+            scope.ServiceProvider.GetRequiredService<IOptions<List<SeedUser>>>().Value);
+    }
 
+    /// <summary>Creates every configured household user that doesn't exist yet.</summary>
+    public static async Task SeedUsersAsync(UserManager<ApplicationUser> userManager, IEnumerable<SeedUser> seedUsers)
+    {
         foreach (var seedUser in seedUsers)
         {
             var existingUser = await userManager.FindByEmailAsync(seedUser.Email);

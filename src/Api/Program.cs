@@ -48,11 +48,19 @@ builder.AddExceptionMapper();
 
 builder.Services.AddFeatures();
 
+builder.Services.AddDemoDataSeeder();
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
     await scope.ServiceProvider.GetRequiredService<BudgetDbContext>().Database.MigrateAsync();
+}
+
+// `dotnet run -- seed-demo-data` resets the database and exits rather than serving.
+if (await app.TryRunDemoDataCommandAsync(args))
+{
+    return;
 }
 
 app.UseExceptionMapper();

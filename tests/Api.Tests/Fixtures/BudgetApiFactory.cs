@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace Api.Tests.Fixtures;
 
@@ -22,6 +23,9 @@ public class BudgetApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public const string SeededUser2Email = "testuser2@household.local";
     public const string SeededUser2Password = "Test123!Password";
 
+    /// <summary>Overridden by fixtures that need the app to believe it is deployed.</summary>
+    protected virtual string Environment => Environments.Development;
+
     public async Task InitializeAsync()
     {
         _connection = new SqliteConnection("DataSource=:memory:");
@@ -30,6 +34,8 @@ public class BudgetApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseEnvironment(Environment);
+
         builder.ConfigureAppConfiguration((_, config) =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
