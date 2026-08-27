@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { budgetsApi, type Budget, type BudgetInput } from '../api/budgets'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { budgetsApi, type BudgetInput, type BudgetWithActual } from '../api/budgets'
 import { categoriesApi, type Category } from '../api/categories'
 import { ApiError } from '../api/client'
 import { CategorySelect } from '../components/CategorySelect'
@@ -14,9 +14,15 @@ function parseMonthValue(monthValue: string): { year: number; month: number } {
   return { year, month }
 }
 
+/** "40.00 left" while under the limit, "40.00 over" once actual spend passes it. */
+function remainingLabel(budget: BudgetWithActual) {
+  const remaining = budget.amount - budget.actual
+  return remaining < 0 ? `${Math.abs(remaining).toFixed(2)} over` : `${remaining.toFixed(2)} left`
+}
+
 export function BudgetsPage() {
   const [monthValue, setMonthValue] = useState(currentMonthValue())
-  const [budgets, setBudgets] = useState<Budget[] | null>(null)
+  const [budgets, setBudgets] = useState<BudgetWithActual[] | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -35,12 +41,22 @@ export function BudgetsPage() {
     })()
   }, [])
 
+  // Switching months fires a fetch while the previous month's is still in flight; only the
+  // most recently issued one may write to state, or a slow earlier response wins the race.
+  const latestLoad = useRef(0)
+
   const load = useCallback(async () => {
+    const loadId = ++latestLoad.current
     const { year, month } = parseMonthValue(monthValue)
     try {
-      setBudgets(await budgetsApi.fetchForMonth(year, month))
+      const loaded = await budgetsApi.fetchForMonth(year, month)
+      if (loadId === latestLoad.current) {
+        setBudgets(loaded)
+      }
     } catch {
-      setError('Failed to load budgets.')
+      if (loadId === latestLoad.current) {
+        setError('Failed to load budgets.')
+      }
     }
   }, [monthValue])
 
@@ -114,6 +130,9 @@ export function BudgetsPage() {
             <tr>
               <th scope="col">Category</th>
               <th scope="col">Monthly limit</th>
+              <th scope="col">Actual</th>
+              <th scope="col">Remaining</th>
+              <th scope="col">Progress</th>
               <th scope="col">Actions</th>
             </tr>
           </thead>
@@ -132,6 +151,7 @@ export function BudgetsPage() {
                 <tr key={budget.id}>
                   <td>{categoryName(budget.categoryId)}</td>
                   <td>{budget.amount.toFixed(2)}</td>
+                  <ActualCells budget={budget} categoryLabel={categoryName(budget.categoryId)} />
                   <td>
                     <button className="secondary" onClick={() => setEditingId(budget.id)}>
                       Edit
@@ -183,6 +203,25 @@ export function BudgetsPage() {
   )
 }
 
+/** The actual-vs-limit half of a budget row — identical whether or not the row is being edited. */
+function ActualCells({ budget, categoryLabel }: { budget: BudgetWithActual; categoryLabel: string }) {
+  // A refunded-into category can go negative; the bar floors at empty and caps at full.
+  const clamped = Math.min(Math.max(budget.actual, 0), budget.amount)
+  return (
+    <>
+      <td>{budget.actual.toFixed(2)}</td>
+      <td>{remainingLabel(budget)}</td>
+      <td>
+        <progress
+          value={clamped}
+          max={budget.amount}
+          aria-label={`${categoryLabel}: ${budget.actual.toFixed(2)} of ${budget.amount.toFixed(2)} spent`}
+        />
+      </td>
+    </>
+  )
+}
+
 function EditRow({
   budget,
   categoryLabel,
@@ -190,7 +229,7 @@ function EditRow({
   onSaved,
   onError,
 }: {
-  budget: Budget
+  budget: BudgetWithActual
   categoryLabel: string
   onDone: () => void
   onSaved: () => Promise<void>
@@ -219,6 +258,7 @@ function EditRow({
       <td>
         <input aria-label="Monthly limit" type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
       </td>
+      <ActualCells budget={budget} categoryLabel={categoryLabel} />
       <td>
         <button aria-busy={saving} disabled={saving} onClick={() => void handleSave()}>
           Save
