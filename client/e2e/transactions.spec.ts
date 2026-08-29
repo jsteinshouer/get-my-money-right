@@ -5,27 +5,27 @@ test('manually adding a transaction shows it in the filtered list', async ({ pag
   await page.getByLabel('Email').fill('user1@household.local')
   await page.getByLabel('Password').fill('ChangeMe123!')
   await page.getByRole('button', { name: 'Log in' }).click()
-  await expect(page.getByRole('heading', { name: /^Welcome,/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'MoneyRight' })).toBeVisible()
 
   const stamp = Date.now()
   const accountName = `E2E Txn Account ${stamp}`
   const categoryName = `E2E Txn Category ${stamp}`
   const description = `E2E Txn ${stamp}`
 
-  await page.getByRole('link', { name: 'Accounts' }).click()
+  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Accounts' }).click()
   await expect(page.getByRole('heading', { name: 'Accounts' })).toBeVisible()
   await page.getByLabel('Name').fill(accountName)
   await page.getByLabel('Type').selectOption('Checking')
   await page.getByRole('button', { name: 'Add account' }).click()
   await expect(page.getByRole('row').filter({ hasText: accountName })).toBeVisible()
 
-  await page.getByRole('link', { name: 'Categories' }).click()
+  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Categories' }).click()
   await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible()
   await page.getByLabel('Name').fill(categoryName)
   await page.getByRole('button', { name: 'Add category' }).click()
   await expect(page.getByRole('row').filter({ hasText: categoryName })).toBeVisible()
 
-  await page.getByRole('link', { name: 'Transactions' }).click()
+  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Transactions' }).click()
   await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible()
 
   const addForm = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Add a transaction' }) })

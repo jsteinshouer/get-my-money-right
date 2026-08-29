@@ -5,9 +5,9 @@ test('adding an account through the UI persists after a page reload', async ({ p
   await page.getByLabel('Email').fill('user1@household.local')
   await page.getByLabel('Password').fill('ChangeMe123!')
   await page.getByRole('button', { name: 'Log in' }).click()
-  await expect(page.getByRole('heading', { name: /^Welcome,/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'MoneyRight' })).toBeVisible()
 
-  await page.getByRole('link', { name: 'Accounts' }).click()
+  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Accounts' }).click()
   await expect(page.getByRole('heading', { name: 'Accounts' })).toBeVisible()
 
   const accountName = `E2E Checking ${Date.now()}`

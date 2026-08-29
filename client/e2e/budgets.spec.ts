@@ -5,18 +5,18 @@ test('setting a category budget shows it in the current month list after reload'
   await page.getByLabel('Email').fill('user1@household.local')
   await page.getByLabel('Password').fill('ChangeMe123!')
   await page.getByRole('button', { name: 'Log in' }).click()
-  await expect(page.getByRole('heading', { name: /^Welcome,/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'MoneyRight' })).toBeVisible()
 
   const stamp = Date.now()
   const categoryName = `E2E Budget Category ${stamp}`
 
-  await page.getByRole('link', { name: 'Categories' }).click()
+  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Categories' }).click()
   await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible()
   await page.getByLabel('Name').fill(categoryName)
   await page.getByRole('button', { name: 'Add category' }).click()
   await expect(page.getByRole('row').filter({ hasText: categoryName })).toBeVisible()
 
-  await page.getByRole('link', { name: 'Budgets' }).click()
+  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Budgets' }).click()
   await expect(page.getByRole('heading', { name: 'Budgets' })).toBeVisible()
 
   const budgetForm = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Set a category budget' }) })
@@ -40,19 +40,19 @@ test('a slow load for the previous month cannot overwrite the month the user swi
   await page.getByLabel('Email').fill('user1@household.local')
   await page.getByLabel('Password').fill('ChangeMe123!')
   await page.getByRole('button', { name: 'Log in' }).click()
-  await expect(page.getByRole('heading', { name: /^Welcome,/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'MoneyRight' })).toBeVisible()
 
   const stamp = Date.now()
   const categoryName = `E2E Race Category ${stamp}`
   const laterMonth = '2030-01'
 
-  await page.getByRole('link', { name: 'Categories' }).click()
+  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Categories' }).click()
   await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible()
   await page.getByLabel('Name').fill(categoryName)
   await page.getByRole('button', { name: 'Add category' }).click()
   await expect(page.getByRole('row').filter({ hasText: categoryName })).toBeVisible()
 
-  await page.getByRole('link', { name: 'Budgets' }).click()
+  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Budgets' }).click()
   await expect(page.getByRole('heading', { name: 'Budgets' })).toBeVisible()
   await page.getByLabel('Month', { exact: true }).fill(laterMonth)
   const budgetForm = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Set a category budget' }) })
