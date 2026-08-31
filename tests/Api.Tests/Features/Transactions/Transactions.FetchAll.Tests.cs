@@ -72,6 +72,52 @@ public class FetchAllTests : IClassFixture<BudgetApiFactory>
         Assert.DoesNotContain(list!, t => t.Id == afterRange.Id);
     }
 
+    [Fact]
+    public async Task FetchAll_FilteredByTag_ReturnsOnlyTaggedTransactions()
+    {
+        var client = _factory.CreateClient();
+        await client.LoginAsync(BudgetApiFactory.SeededUser1Email, BudgetApiFactory.SeededUser1Password);
+        var accountId = await TransactionsTestHelpers.CreateAccountAsync(client, "Tag Filter Account");
+        var categoryId = await TransactionsTestHelpers.CreateCategoryAsync(client, "Tag Filter Category");
+        var tagId = await TransactionsTestHelpers.CreateTagAsync(client, "Tag Filter Tag");
+
+        var tagged = await CreateTransactionAsync(client, accountId, categoryId, new DateOnly(2026, 7, 4), NeedWant.Want);
+        var untagged = await CreateTransactionAsync(client, accountId, categoryId, new DateOnly(2026, 7, 4), NeedWant.Want);
+        (await client.PutAsync($"/api/transactions/{tagged.Id}/tags/{tagId}", null)).EnsureSuccessStatusCode();
+
+        var list = await client.GetFromJsonAsync<List<FetchAll.Response>>(
+            $"/api/transactions?tagId={tagId}", TestClientExtensions.JsonOptions);
+
+        Assert.NotNull(list);
+        Assert.Contains(list!, t => t.Id == tagged.Id);
+        Assert.DoesNotContain(list!, t => t.Id == untagged.Id);
+        Assert.All(list!, t => Assert.Contains(tagId, t.TagIds));
+    }
+
+    [Fact]
+    public async Task FetchAll_ReturnsTheTagsAssignedToEachTransaction()
+    {
+        var client = _factory.CreateClient();
+        await client.LoginAsync(BudgetApiFactory.SeededUser1Email, BudgetApiFactory.SeededUser1Password);
+        var accountId = await TransactionsTestHelpers.CreateAccountAsync(client, "Tag Ids Account");
+        var categoryId = await TransactionsTestHelpers.CreateCategoryAsync(client, "Tag Ids Category");
+        var firstTagId = await TransactionsTestHelpers.CreateTagAsync(client, "Tag Ids First");
+        var secondTagId = await TransactionsTestHelpers.CreateTagAsync(client, "Tag Ids Second");
+
+        var tagged = await CreateTransactionAsync(client, accountId, categoryId, new DateOnly(2026, 8, 8), NeedWant.Need);
+        var untagged = await CreateTransactionAsync(client, accountId, categoryId, new DateOnly(2026, 8, 8), NeedWant.Need);
+        (await client.PutAsync($"/api/transactions/{tagged.Id}/tags/{firstTagId}", null)).EnsureSuccessStatusCode();
+        (await client.PutAsync($"/api/transactions/{tagged.Id}/tags/{secondTagId}", null)).EnsureSuccessStatusCode();
+
+        var list = await client.GetFromJsonAsync<List<FetchAll.Response>>(
+            $"/api/transactions?accountId={accountId}", TestClientExtensions.JsonOptions);
+
+        Assert.NotNull(list);
+        var taggedResponse = Assert.Single(list!.Where(t => t.Id == tagged.Id));
+        Assert.Equal(new[] { firstTagId, secondTagId }.OrderBy(id => id), taggedResponse.TagIds.OrderBy(id => id));
+        Assert.Empty(Assert.Single(list!.Where(t => t.Id == untagged.Id)).TagIds);
+    }
+
     private static async Task<Create.Response> CreateTransactionAsync(
         HttpClient client, int accountId, int categoryId, DateOnly date, NeedWant needWant)
     {

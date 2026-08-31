@@ -1,6 +1,7 @@
 using Api.Features.Accounts;
 using Api.Features.Budgets;
 using Api.Features.Categories;
+using Api.Features.Tags;
 using Api.Features.Transactions;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,8 @@ public class BudgetDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Categories.Category> Categories => Set<Categories.Category>();
     public DbSet<Transactions.Transaction> Transactions => Set<Transactions.Transaction>();
     public DbSet<Budgets.Budget> Budgets => Set<Budgets.Budget>();
+    public DbSet<Tags.Tag> Tags => Set<Tags.Tag>();
+    public DbSet<Tags.TransactionTag> TransactionTags => Set<Tags.TransactionTag>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -73,5 +76,32 @@ public class BudgetDbContext : IdentityDbContext<ApplicationUser>
             .WithMany()
             .HasForeignKey(b => b.CategoryId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Tags.Tag>()
+            .HasIndex(t => t.Name)
+            .IsUnique();
+
+        builder.Entity<Tags.Tag>()
+            .HasOne<ApplicationUser>()
+            .WithMany()
+            .HasForeignKey(t => t.CreatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Tags.TransactionTag>()
+            .HasKey(tt => new { tt.TransactionId, tt.TagId });
+
+        // Cascading both ways: an assignment has no meaning once either side is gone, so deleting
+        // a tag or a transaction clears its assignments instead of being blocked by them.
+        builder.Entity<Tags.TransactionTag>()
+            .HasOne<Transactions.Transaction>()
+            .WithMany()
+            .HasForeignKey(tt => tt.TransactionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<Tags.TransactionTag>()
+            .HasOne<Tags.Tag>()
+            .WithMany()
+            .HasForeignKey(tt => tt.TagId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

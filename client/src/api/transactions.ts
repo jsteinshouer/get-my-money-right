@@ -12,6 +12,7 @@ export interface Transaction {
   amount: number
   description: string
   needWant: NeedWant
+  tagIds: number[]
 }
 
 export interface TransactionInput {
@@ -29,6 +30,7 @@ export interface TransactionFilters {
   dateFrom?: string
   dateTo?: string
   needWant?: NeedWant
+  tagId?: number
 }
 
 function buildQuery(filters: TransactionFilters): string {
@@ -38,6 +40,7 @@ function buildQuery(filters: TransactionFilters): string {
   if (filters.dateFrom) params.set('dateFrom', filters.dateFrom)
   if (filters.dateTo) params.set('dateTo', filters.dateTo)
   if (filters.needWant) params.set('needWant', filters.needWant)
+  if (filters.tagId) params.set('tagId', String(filters.tagId))
   const query = params.toString()
   return query ? `?${query}` : ''
 }

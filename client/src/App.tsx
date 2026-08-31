@@ -7,6 +7,7 @@ import { StatusPage } from './pages/StatusPage'
 import { AccountsPage } from './pages/AccountsPage'
 import { BudgetsPage } from './pages/BudgetsPage'
 import { CategoriesPage } from './pages/CategoriesPage'
+import { TagsPage } from './pages/TagsPage'
 import { TransactionsPage } from './pages/TransactionsPage'
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
             <Route path="/" element={<StatusPage />} />
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
+            <Route path="/tags" element={<TagsPage />} />
             <Route path="/transactions" element={<TransactionsPage />} />
             <Route path="/budgets" element={<BudgetsPage />} />
           </Route>

@@ -3,10 +3,13 @@ import { useSearchParams } from 'react-router-dom'
 import { accountsApi, type Account } from '../api/accounts'
 import { ApiError } from '../api/client'
 import { categoriesApi, type Category } from '../api/categories'
+import { tagsApi, type Tag } from '../api/tags'
 import { transactionsApi, type NeedWant, type Transaction, type TransactionInput } from '../api/transactions'
 import { AccountSelect } from '../components/AccountSelect'
 import { CategorySelect } from '../components/CategorySelect'
 import { NeedWantSelect } from '../components/NeedWantSelect'
+import { TagMultiSelect } from '../components/TagMultiSelect'
+import { TagSelect } from '../components/TagSelect'
 
 const emptyForm = {
   accountId: '' as number | '',
@@ -21,6 +24,7 @@ export function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[] | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [tags, setTags] = useState<Tag[]>([])
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
 
@@ -40,6 +44,7 @@ export function TransactionsPage() {
     const raw = searchParams.get('needWant')
     return raw === 'Need' || raw === 'Want' ? raw : ''
   })
+  const [filterTagId, setFilterTagId] = useState<number | ''>(() => numberParam('tagId'))
 
   const [form, setForm] = useState(emptyForm)
   const [adding, setAdding] = useState(false)
@@ -47,11 +52,16 @@ export function TransactionsPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const [accountList, categoryList] = await Promise.all([accountsApi.fetchAll(true), categoriesApi.fetchAll()])
+        const [accountList, categoryList, tagList] = await Promise.all([
+          accountsApi.fetchAll(true),
+          categoriesApi.fetchAll(),
+          tagsApi.fetchAll(),
+        ])
         setAccounts(accountList)
         setCategories(categoryList)
+        setTags(tagList)
       } catch {
-        setError('Failed to load accounts or categories.')
+        setError('Failed to load accounts, categories or tags.')
       }
     })()
   }, [])
@@ -65,12 +75,13 @@ export function TransactionsPage() {
           dateFrom: filterDateFrom || undefined,
           dateTo: filterDateTo || undefined,
           needWant: filterNeedWant || undefined,
+          tagId: filterTagId || undefined,
         }),
       )
     } catch {
       setError('Failed to load transactions.')
     }
-  }, [filterAccountId, filterCategoryId, filterDateFrom, filterDateTo, filterNeedWant])
+  }, [filterAccountId, filterCategoryId, filterDateFrom, filterDateTo, filterNeedWant, filterTagId])
 
   useEffect(() => {
     void load()
@@ -124,6 +135,12 @@ export function TransactionsPage() {
     return categories.find((c) => c.id === categoryId)?.name ?? 'Unknown category'
   }
 
+  function tagNames(tagIds: number[]) {
+    return tagIds
+      .map((tagId) => tags.find((t) => t.id === tagId)?.name)
+      .filter((name): name is string => name !== undefined)
+  }
+
   return (
     <>
       <h1>Transactions</h1>
@@ -159,6 +176,10 @@ export function TransactionsPage() {
           </label>
         </div>
         <div className="grid">
+          <label htmlFor="filter-tag">
+            Filter by tag
+            <TagSelect id="filter-tag" tags={tags} value={filterTagId} onChange={setFilterTagId} />
+          </label>
           <label htmlFor="filter-date-from">
             From
             <input
@@ -189,6 +210,7 @@ export function TransactionsPage() {
               <th scope="col">Description</th>
               <th scope="col">Amount</th>
               <th scope="col">Need/Want</th>
+              <th scope="col">Tags</th>
               <th scope="col">Actions</th>
             </tr>
           </thead>
@@ -200,6 +222,7 @@ export function TransactionsPage() {
                   transaction={transaction}
                   accounts={accounts}
                   categories={categories}
+                  tags={tags}
                   onDone={() => setEditingId(null)}
                   onSaved={load}
                   onError={setError}
@@ -212,6 +235,19 @@ export function TransactionsPage() {
                   <td>{transaction.description}</td>
                   <td>{transaction.amount.toFixed(2)}</td>
                   <td>{transaction.needWant}</td>
+                  <td>
+                    {transaction.tagIds.length === 0 ? (
+                      <span className="tag-none">—</span>
+                    ) : (
+                      <span className="tag-marks">
+                        {tagNames(transaction.tagIds).map((name) => (
+                          <span key={name} className="tag-mark">
+                            {name}
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                  </td>
                   <td>
                     <button className="secondary" onClick={() => setEditingId(transaction.id)}>
                       Edit
@@ -307,6 +343,7 @@ function EditRow({
   transaction,
   accounts,
   categories,
+  tags,
   onDone,
   onSaved,
   onError,
@@ -314,6 +351,7 @@ function EditRow({
   transaction: Transaction
   accounts: Account[]
   categories: Category[]
+  tags: Tag[]
   onDone: () => void
   onSaved: () => Promise<void>
   onError: (message: string) => void
@@ -324,6 +362,7 @@ function EditRow({
   const [amount, setAmount] = useState(String(transaction.amount))
   const [description, setDescription] = useState(transaction.description)
   const [needWant, setNeedWant] = useState<NeedWant | ''>(transaction.needWant)
+  const [tagIds, setTagIds] = useState<number[]>(transaction.tagIds)
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
@@ -336,6 +375,11 @@ function EditRow({
     try {
       const input: TransactionInput = { accountId, categoryId, date, amount: Number(amount), description, needWant }
       await transactionsApi.update(transaction.id, input)
+      // Tags live behind their own assign/remove endpoints, so only what actually changed is sent.
+      await Promise.all([
+        ...tagIds.filter((id) => !transaction.tagIds.includes(id)).map((id) => tagsApi.assign(transaction.id, id)),
+        ...transaction.tagIds.filter((id) => !tagIds.includes(id)).map((id) => tagsApi.remove(transaction.id, id)),
+      ])
       onDone()
       await onSaved()
     } catch (err) {
@@ -368,6 +412,9 @@ function EditRow({
       </td>
       <td>
         <NeedWantSelect label="Need/Want" value={needWant} onChange={setNeedWant} required />
+      </td>
+      <td>
+        <TagMultiSelect tags={tags} selectedIds={tagIds} onChange={setTagIds} />
       </td>
       <td>
         <button aria-busy={saving} disabled={saving} onClick={() => void handleSave()}>
