@@ -345,7 +345,7 @@ td.money, th.money { text-align: right; font-variant-numeric: tabular-nums linin
 /* --- tags: annotations pencilled beside an entry --------------------------- */
 
 /* A tag is a note in the margin, not a badge: underlined in oxblood, set in the
-   same small caps the column heads use, and never boxed. */
+   same tracked caps the column heads use, and never boxed. */
 .tag-marks {
   display: flex;
   flex-wrap: wrap;
@@ -353,10 +353,10 @@ td.money, th.money { text-align: right; font-variant-numeric: tabular-nums linin
 }
 
 .tag-mark {
-  font-size: 0.68rem;
+  font-size: 0.705rem;
   font-weight: 650;
   font-stretch: 86%;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.105em;
   text-transform: uppercase;
   color: var(--ink-2);
   border-bottom: 1px solid var(--signal);
@@ -373,11 +373,11 @@ td.money, th.money { text-align: right; font-variant-numeric: tabular-nums linin
   margin-top: var(--gap-2);
 }
 
-/* Overrides the uppercase field label above, since these read as values, not headings. */
+/* Overrides the uppercase field label above: these read as values, so they take body type. */
 .tag-option {
   display: inline-flex;
   align-items: center;
-  font-size: 0.82rem;
+  font-size: 1rem;
   font-weight: 450;
   font-stretch: 100%;
   letter-spacing: normal;

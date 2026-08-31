@@ -39,6 +39,7 @@ public static partial class Tags
         // Assignments hang off the transaction they belong to, not off the tag.
         var transactionTags = endpoints.MapGroup("transactions/{transactionId:int}/tags")
             .WithTags("Tags")
+            .AddFluentValidationAutoValidation()
             .RequireAuthorization();
         transactionTags.MapAssignToTransaction().MapRemoveFromTransaction();
 

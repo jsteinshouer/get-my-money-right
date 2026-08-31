@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using static Api.Features.Budgets.Budgets;
 using CategoriesFeature = Api.Features.Categories.Categories;
+using TagsFeature = Api.Features.Tags.Tags;
 using TransactionsFeature = Api.Features.Transactions.Transactions;
 
 namespace Api.Tests.Data;
@@ -91,6 +92,22 @@ public class DemoDataSeederTests : IClassFixture<BudgetApiFactory>
 
         var categories = await reseededClient.GetFromJsonAsync<List<CategoriesFeature.FetchAll.Response>>("/api/categories");
         Assert.DoesNotContain(categories!, category => category.Name == strayCategory);
+    }
+
+    [Fact]
+    public async Task Reset_DeletesTagsThatWereAlreadyThere()
+    {
+        var client = await ResetAndLogInAsync();
+        var strayTag = $"Stray Tag {Guid.NewGuid()}";
+        (await client.PostAsJsonAsync("/api/tags", new TagsFeature.Create.Command(strayTag)))
+            .EnsureSuccessStatusCode();
+
+        // A tag points at the user who created it, so a reset that skipped tags would be blocked
+        // by that foreign key rather than merely leaving the row behind.
+        var reseededClient = await ResetAndLogInAsync();
+
+        var tags = await reseededClient.GetFromJsonAsync<List<TagsFeature.FetchAll.Response>>("/api/tags");
+        Assert.DoesNotContain(tags!, tag => tag.Name == strayTag);
     }
 
     [Fact]

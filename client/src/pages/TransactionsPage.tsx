@@ -372,24 +372,36 @@ function EditRow({
     }
 
     setSaving(true)
+
     try {
       const input: TransactionInput = { accountId, categoryId, date, amount: Number(amount), description, needWant }
       await transactionsApi.update(transaction.id, input)
-      // Tags live behind their own assign/remove endpoints, so only what actually changed is sent.
-      await Promise.all([
-        ...tagIds.filter((id) => !transaction.tagIds.includes(id)).map((id) => tagsApi.assign(transaction.id, id)),
-        ...transaction.tagIds.filter((id) => !tagIds.includes(id)).map((id) => tagsApi.remove(transaction.id, id)),
-      ])
-      onDone()
-      await onSaved()
     } catch (err) {
+      // Nothing was persisted, so the row stays open with the edits still in it.
+      setSaving(false)
       if (err instanceof ApiError && err.status === 409) {
         onError('That account or category no longer exists.')
       } else {
         onError('Failed to save the transaction.')
       }
+      return
+    }
+
+    // Tags live behind their own assign/remove endpoints, so only what actually changed is sent.
+    // The transaction itself is saved by this point, so a failure here closes the row and reloads
+    // anyway: the list then shows which tag changes stuck, rather than leaving the form to retry
+    // against a baseline the server has already moved past.
+    try {
+      await Promise.all([
+        ...tagIds.filter((id) => !transaction.tagIds.includes(id)).map((id) => tagsApi.assign(transaction.id, id)),
+        ...transaction.tagIds.filter((id) => !tagIds.includes(id)).map((id) => tagsApi.remove(transaction.id, id)),
+      ])
+    } catch {
+      onError('The transaction was saved, but its tags could not all be updated.')
     } finally {
       setSaving(false)
+      onDone()
+      await onSaved()
     }
   }
 
