@@ -46,7 +46,7 @@ public static partial class Categories
                     return null;
                 }
 
-                category.Name = command.Name;
+                category.Name = command.Name.Trim();
                 await _db.SaveChangesAsync(cancellationToken);
                 return _mapper.Map(category);
             }

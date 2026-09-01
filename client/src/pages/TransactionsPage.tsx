@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { accountsApi, type Account } from '../api/accounts'
 import { ApiError } from '../api/client'
@@ -8,7 +8,8 @@ import { transactionsApi, type NeedWant, type Transaction, type TransactionInput
 import { AccountSelect } from '../components/AccountSelect'
 import { CategorySelect } from '../components/CategorySelect'
 import { NeedWantSelect } from '../components/NeedWantSelect'
-import { TagMultiSelect } from '../components/TagMultiSelect'
+import { TagCombobox } from '../components/TagCombobox'
+import { TagLine } from '../components/TagLine'
 import { TagSelect } from '../components/TagSelect'
 
 const emptyForm = {
@@ -26,7 +27,10 @@ export function TransactionsPage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [tags, setTags] = useState<Tag[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [applying, setApplying] = useState(false)
 
   // The ledger spread links here with a category and month already chosen, so the
   // filters start from the URL rather than empty.
@@ -49,22 +53,22 @@ export function TransactionsPage() {
   const [form, setForm] = useState(emptyForm)
   const [adding, setAdding] = useState(false)
 
+  const loadTags = useCallback(async () => {
+    setTags(await tagsApi.fetchAll())
+  }, [])
+
   useEffect(() => {
     void (async () => {
       try {
-        const [accountList, categoryList, tagList] = await Promise.all([
-          accountsApi.fetchAll(true),
-          categoriesApi.fetchAll(),
-          tagsApi.fetchAll(),
-        ])
+        const [accountList, categoryList] = await Promise.all([accountsApi.fetchAll(true), categoriesApi.fetchAll()])
         setAccounts(accountList)
         setCategories(categoryList)
-        setTags(tagList)
+        await loadTags()
       } catch {
         setError('Failed to load accounts, categories or tags.')
       }
     })()
-  }, [])
+  }, [loadTags])
 
   const load = useCallback(async () => {
     try {
@@ -86,6 +90,27 @@ export function TransactionsPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // A selection only means anything against the list it was made on, so changing the filters drops it.
+  useEffect(() => {
+    setSelectedIds([])
+  }, [filterAccountId, filterCategoryId, filterDateFrom, filterDateTo, filterNeedWant, filterTagId])
+
+  async function createTag(name: string): Promise<Tag | null> {
+    setError(null)
+    try {
+      const created = await tagsApi.create(name)
+      await loadTags()
+      return created
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.status === 409
+          ? `A tag called “${name}” already exists.`
+          : 'Failed to create the tag.',
+      )
+      return null
+    }
+  }
 
   async function handleAdd(event: FormEvent) {
     event.preventDefault()
@@ -127,6 +152,27 @@ export function TransactionsPage() {
     }
   }
 
+  async function applyTagToSelection(tag: Tag) {
+    setError(null)
+    setNotice(null)
+    setApplying(true)
+    try {
+      const result = await tagsApi.assignToMany(tag.id, selectedIds)
+      // Counted, never silent: the household is told what the batch changed and what it left.
+      const already =
+        result.alreadyTaggedCount > 0 ? ` ${result.alreadyTaggedCount} already carried it.` : ''
+      setNotice(
+        `Tagged ${result.assignedCount} ${result.assignedCount === 1 ? 'transaction' : 'transactions'} “${tag.name}”.${already}`,
+      )
+      setSelectedIds([])
+      await Promise.all([load(), loadTags()])
+    } catch {
+      setError('Failed to tag the selected transactions.')
+    } finally {
+      setApplying(false)
+    }
+  }
+
   function accountName(accountId: number) {
     return accounts.find((a) => a.id === accountId)?.name ?? 'Unknown account'
   }
@@ -141,11 +187,23 @@ export function TransactionsPage() {
       .filter((name): name is string => name !== undefined)
   }
 
+  const total = useMemo(
+    () => (transactions ?? []).reduce((sum, transaction) => sum + transaction.amount, 0),
+    [transactions],
+  )
+
+  const allSelected = transactions !== null && transactions.length > 0 && selectedIds.length === transactions.length
+
+  function toggleAll(checked: boolean) {
+    setSelectedIds(checked ? (transactions ?? []).map((t) => t.id) : [])
+  }
+
   return (
     <>
       <h1>Transactions</h1>
 
       {error && <p role="alert">{error}</p>}
+      {notice && <p role="status" className="notice">{notice}</p>}
 
       <article>
         <h2>Filters</h2>
@@ -196,71 +254,127 @@ export function TransactionsPage() {
         </div>
       </article>
 
+      {selectedIds.length > 0 && (
+        <div className="selection-bar" role="region" aria-label="Tag the selected transactions">
+          <p className="selection-count">
+            {selectedIds.length} selected
+          </p>
+          <TagCombobox
+            label="Tag the selected transactions"
+            placeholder="Write a tag to apply…"
+            tags={tags}
+            disabled={applying}
+            onPick={(tag) => void applyTagToSelection(tag)}
+            onCreate={createTag}
+          />
+          <button className="secondary" onClick={() => setSelectedIds([])}>
+            Clear selection
+          </button>
+        </div>
+      )}
+
       {transactions === null ? (
         <p aria-busy="true">Loading…</p>
       ) : transactions.length === 0 ? (
         <p>No transactions match the current filters.</p>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Date</th>
-              <th scope="col">Account</th>
-              <th scope="col">Category</th>
-              <th scope="col">Description</th>
-              <th scope="col">Amount</th>
-              <th scope="col">Need/Want</th>
-              <th scope="col">Tags</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {transactions.map((transaction) =>
-              editingId === transaction.id ? (
-                <EditRow
-                  key={transaction.id}
-                  transaction={transaction}
-                  accounts={accounts}
-                  categories={categories}
-                  tags={tags}
-                  onDone={() => setEditingId(null)}
-                  onSaved={load}
-                  onError={setError}
-                />
-              ) : (
-                <tr key={transaction.id}>
-                  <td>{transaction.date}</td>
-                  <td>{accountName(transaction.accountId)}</td>
-                  <td>{categoryName(transaction.categoryId)}</td>
-                  <td>{transaction.description}</td>
-                  <td>{transaction.amount.toFixed(2)}</td>
-                  <td>{transaction.needWant}</td>
-                  <td>
-                    {transaction.tagIds.length === 0 ? (
-                      <span className="tag-none">—</span>
-                    ) : (
-                      <span className="tag-marks">
-                        {tagNames(transaction.tagIds).map((name) => (
-                          <span key={name} className="tag-mark">
-                            {name}
-                          </span>
-                        ))}
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    <button className="secondary" onClick={() => setEditingId(transaction.id)}>
-                      Edit
-                    </button>{' '}
-                    <button className="contrast" onClick={() => void handleDelete(transaction.id)}>
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ),
-            )}
-          </tbody>
-        </table>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col" className="col-select">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all transactions"
+                    checked={allSelected}
+                    onChange={(e) => toggleAll(e.target.checked)}
+                  />
+                </th>
+                <th scope="col" className="col-date">Date</th>
+                <th scope="col" className="col-account">Account</th>
+                <th scope="col">Category</th>
+                <th scope="col">Description</th>
+                <th scope="col" className="money">Amount</th>
+                <th scope="col" className="col-needwant">Need/Want</th>
+                <th scope="col">Tags</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((transaction) =>
+                editingId === transaction.id ? (
+                  <EditRow
+                    key={transaction.id}
+                    transaction={transaction}
+                    accounts={accounts}
+                    categories={categories}
+                    tags={tags}
+                    onCreateTag={createTag}
+                    onDone={() => setEditingId(null)}
+                    onSaved={load}
+                    onError={setError}
+                  />
+                ) : (
+                  <tr key={transaction.id} data-selected={selectedIds.includes(transaction.id)}>
+                    <td className="col-select">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${transaction.description}`}
+                        checked={selectedIds.includes(transaction.id)}
+                        onChange={(e) =>
+                          setSelectedIds(
+                            e.target.checked
+                              ? [...selectedIds, transaction.id]
+                              : selectedIds.filter((id) => id !== transaction.id),
+                          )
+                        }
+                      />
+                    </td>
+                    <td className="col-date">{transaction.date}</td>
+                    <td className="col-account">{accountName(transaction.accountId)}</td>
+                    <td>{categoryName(transaction.categoryId)}</td>
+                    <td>{transaction.description}</td>
+                    <td className="money">{transaction.amount.toFixed(2)}</td>
+                    <td className="col-needwant">{transaction.needWant}</td>
+                    <td>
+                      {transaction.tagIds.length === 0 ? (
+                        <span className="tag-none">—</span>
+                      ) : (
+                        <ul className="tag-marks">
+                          {tagNames(transaction.tagIds).map((name) => (
+                            <li key={name}>
+                              <span className="tag-mark">{name}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                    <td>
+                      <button className="secondary" onClick={() => setEditingId(transaction.id)}>
+                        Edit
+                      </button>{' '}
+                      <button className="contrast" onClick={() => void handleDelete(transaction.id)}>
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ),
+              )}
+            </tbody>
+            <tfoot>
+              <tr className="ledger-close">
+                <td className="col-select" />
+                <td colSpan={4}>
+                  {transactions.length} {transactions.length === 1 ? 'entry' : 'entries'} shown
+                </td>
+                <td className="money">{total.toFixed(2)}</td>
+                <td className="col-needwant" />
+                <td />
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       )}
 
       <article>
@@ -344,6 +458,7 @@ function EditRow({
   accounts,
   categories,
   tags,
+  onCreateTag,
   onDone,
   onSaved,
   onError,
@@ -352,6 +467,7 @@ function EditRow({
   accounts: Account[]
   categories: Category[]
   tags: Tag[]
+  onCreateTag: (name: string) => Promise<Tag | null>
   onDone: () => void
   onSaved: () => Promise<void>
   onError: (message: string) => void
@@ -364,6 +480,8 @@ function EditRow({
   const [needWant, setNeedWant] = useState<NeedWant | ''>(transaction.needWant)
   const [tagIds, setTagIds] = useState<number[]>(transaction.tagIds)
   const [saving, setSaving] = useState(false)
+  const [creatingTag, setCreatingTag] = useState(false)
+  const originalTagIds = useRef(transaction.tagIds)
 
   async function handleSave() {
     if (accountId === '' || categoryId === '' || needWant === '') {
@@ -391,10 +509,11 @@ function EditRow({
     // The transaction itself is saved by this point, so a failure here closes the row and reloads
     // anyway: the list then shows which tag changes stuck, rather than leaving the form to retry
     // against a baseline the server has already moved past.
+    const original = originalTagIds.current
     try {
       await Promise.all([
-        ...tagIds.filter((id) => !transaction.tagIds.includes(id)).map((id) => tagsApi.assign(transaction.id, id)),
-        ...transaction.tagIds.filter((id) => !tagIds.includes(id)).map((id) => tagsApi.remove(transaction.id, id)),
+        ...tagIds.filter((id) => !original.includes(id)).map((id) => tagsApi.assign(transaction.id, id)),
+        ...original.filter((id) => !tagIds.includes(id)).map((id) => tagsApi.remove(transaction.id, id)),
       ])
     } catch {
       onError('The transaction was saved, but its tags could not all be updated.')
@@ -406,11 +525,12 @@ function EditRow({
   }
 
   return (
-    <tr>
-      <td>
+    <tr className="is-editing">
+      <td className="col-select" />
+      <td className="col-date">
         <input aria-label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       </td>
-      <td>
+      <td className="col-account">
         <AccountSelect label="Account" accounts={accounts} value={accountId} onChange={setAccountId} required />
       </td>
       <td>
@@ -419,17 +539,23 @@ function EditRow({
       <td>
         <input aria-label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
       </td>
-      <td>
+      <td className="money">
         <input aria-label="Amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
       </td>
-      <td>
+      <td className="col-needwant">
         <NeedWantSelect label="Need/Want" value={needWant} onChange={setNeedWant} required />
       </td>
       <td>
-        <TagMultiSelect tags={tags} selectedIds={tagIds} onChange={setTagIds} />
+        <TagLine
+          tags={tags}
+          selectedIds={tagIds}
+          onChange={setTagIds}
+          onCreate={onCreateTag}
+          onBusyChange={setCreatingTag}
+        />
       </td>
       <td>
-        <button aria-busy={saving} disabled={saving} onClick={() => void handleSave()}>
+        <button aria-busy={saving || creatingTag} disabled={saving || creatingTag} onClick={() => void handleSave()}>
           Save
         </button>{' '}
         <button className="secondary" onClick={onDone}>

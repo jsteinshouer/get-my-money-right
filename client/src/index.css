@@ -350,7 +350,12 @@ td.money, th.money { text-align: right; font-variant-numeric: tabular-nums linin
   display: flex;
   flex-wrap: wrap;
   gap: var(--gap-1) var(--gap-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
+
+.tag-marks li { display: inline-flex; align-items: baseline; gap: 1px; }
 
 .tag-mark {
   font-size: 0.705rem;
@@ -366,26 +371,185 @@ td.money, th.money { text-align: right; font-variant-numeric: tabular-nums linin
 
 .tag-none { color: var(--ink-3); }
 
-.tag-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--gap-1) var(--gap-4);
-  margin-top: var(--gap-2);
+/* The strike-through of a marginal note, not an icon button. */
+.tag-remove {
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0 0.2rem;
+  min-height: 1.35rem;
+  color: var(--ink-3);
+  background: none;
+  border: 0;
+  letter-spacing: normal;
 }
 
-/* Overrides the uppercase field label above: these read as values, so they take body type. */
-.tag-option {
-  display: inline-flex;
-  align-items: center;
-  font-size: 1rem;
-  font-weight: 450;
-  font-stretch: 100%;
-  letter-spacing: normal;
-  text-transform: none;
-  color: var(--ink);
-  margin-bottom: 0;
-  white-space: nowrap;
+.tag-remove:hover { color: var(--paper-raised); background: var(--signal); border-color: var(--signal); }
+
+/* --- the tag line: where a tag is written, not hunted ---------------------- */
+
+.tag-line { display: flex; flex-direction: column; gap: var(--gap-2); min-width: 10rem; }
+
+.tag-combobox { position: relative; }
+
+.tag-combobox input {
+  margin-top: 0;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.9rem;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.tag-combobox input:focus { border-bottom-color: var(--signal); outline: none; }
+.tag-combobox input:focus-visible { outline: none; }
+
+/* The ruled slip a suggestion list is: square, hairline-ruled, never a floating card. */
+.tag-suggestions {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  min-width: max(100%, 13rem);
+  max-height: 13rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+}
+
+/* Near the foot of the scrolling ledger there is no room below, and the slip would be clipped
+   by the table's own scroll box, so it opens upward instead. */
+.tag-suggestions.is-above { top: auto; bottom: 100%; }
+
+.tag-suggestions[hidden] { display: none; }
+
+.tag-suggestions li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap-3);
+  padding: 0.3rem 0.5rem;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--rule-hair);
   cursor: pointer;
+  white-space: nowrap;
+}
+
+.tag-suggestions li:last-child { border-bottom: 0; }
+.tag-suggestions li:hover,
+.tag-suggestions li.is-active { background: var(--paper-sunk); }
+.tag-suggestions li.is-create { color: var(--signal); font-weight: 550; }
+
+.tag-suggestion-count {
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.tag-recent { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--gap-1) var(--gap-2); }
+
+.tag-recent-label {
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Reads as a written tag you can click, not as a button. */
+.tag-recent-option {
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  padding: 0.1rem 0;
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--rule-strong);
+}
+
+.tag-recent-option:hover { color: var(--signal); background: none; border-bottom-color: var(--signal); }
+
+/* --- selection: the batch the investigation works on ---------------------- */
+
+.selection-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-3) var(--gap-4);
+  margin-top: var(--gap-5);
+  padding: var(--gap-3) var(--gap-4);
+  background: var(--paper-field);
+  border: 1px solid var(--rule-strong);
+  border-left: 1px solid var(--signal);
+}
+
+.selection-bar .tag-combobox { flex: 1 1 14rem; }
+
+.selection-count {
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--ink);
+  margin: 0;
+  white-space: nowrap;
+}
+
+tbody tr[data-selected='true'] { background: var(--paper-sunk); }
+tbody tr.is-editing { background: var(--paper-field); }
+
+/* --- the closing figure of a filtered list -------------------------------- */
+
+tfoot .ledger-close td {
+  padding-top: var(--gap-2);
+  border-top: 1px solid var(--ink);
+  border-bottom: 3px double var(--ink);
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+tfoot .ledger-close td.money {
+  font-size: 1.16rem;
+  letter-spacing: -0.02em;
+  text-transform: none;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* --- a confirmation, printed in the page rather than over it -------------- */
+
+.confirm {
+  margin-block: var(--gap-4);
+  padding: var(--gap-3) var(--gap-4);
+  max-width: var(--measure);
+  background: var(--signal-soft);
+  border: 1px solid var(--signal);
+}
+
+.confirm p { margin-bottom: var(--gap-3); }
+.confirm-actions { display: flex; flex-wrap: wrap; gap: var(--gap-2); }
+
+/* A reported outcome, set off by a single rule like a memo. */
+.notice {
+  padding: var(--gap-3) var(--gap-4);
+  background: var(--paper-field);
+  border-left: 1px solid var(--rule-strong);
+  margin-block: var(--gap-4);
+  max-width: var(--measure);
+  color: var(--ink-2);
 }
 
 .visually-hidden {
@@ -410,6 +574,46 @@ td.money, th.money { text-align: right; font-variant-numeric: tabular-nums linin
   border-left: 1px solid var(--signal);
   margin-block: var(--gap-4);
   max-width: var(--measure);
+}
+
+/* --- narrow screens: the ledger keeps its figures, drops its asides -------- */
+
+/* The safety net: a ruled table never dictates the page's own scroll. */
+.table-scroll { overflow-x: auto; margin-block: var(--gap-4); }
+.table-scroll > table { margin-block: 0; }
+
+/* Sticky cells paint over what scrolls beneath them, so every row states its own ground. */
+.table-scroll thead tr, .table-scroll tfoot tr, .table-scroll tbody tr { background: var(--paper); }
+.table-scroll tbody tr[data-selected='true'] { background: var(--paper-sunk); }
+.table-scroll tbody tr.is-editing { background: var(--paper-field); }
+
+/* The closing column travels with the reader: at any width, Save and Delete stay reachable
+   instead of being hunted for sideways. */
+.table-scroll th:last-child,
+.table-scroll td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: inherit;
+  border-left: 1px solid var(--signal-soft);
+}
+
+.table-scroll thead th:last-child { z-index: 2; }
+
+/* A date and a row's actions are single objects: neither ever breaks across two lines. */
+.col-date { white-space: nowrap; }
+.table-scroll th:last-child, .table-scroll td:last-child { white-space: nowrap; }
+
+/* The date picker's native control makes this the widest column in the ledger otherwise. */
+.table-scroll td input[type='date'] { min-width: 8.5rem; }
+
+@media (max-width: 46rem) {
+  /* Account and Need/Want are desk detail; the phone carries what a purchase was and
+     what it cost. Selection goes with them: batch tagging is a desk session. */
+  .col-account, .col-needwant, .col-select { display: none; }
+
+  .selection-bar { flex-direction: column; align-items: stretch; }
+  .tag-line { min-width: 9rem; }
 }
 
 /* --- reduced motion ------------------------------------------------------- */

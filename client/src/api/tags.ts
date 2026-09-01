@@ -3,6 +3,12 @@ import { apiClient } from './client'
 export interface Tag {
   id: number
   name: string
+  transactionCount: number
+}
+
+export interface BulkAssignResult {
+  assignedCount: number
+  alreadyTaggedCount: number
 }
 
 export const tagsApi = {
@@ -13,4 +19,6 @@ export const tagsApi = {
     apiClient.put<void>(`/transactions/${transactionId}/tags/${tagId}`),
   remove: (transactionId: number, tagId: number) =>
     apiClient.delete<void>(`/transactions/${transactionId}/tags/${tagId}`),
+  assignToMany: (tagId: number, transactionIds: number[]) =>
+    apiClient.post<BulkAssignResult>(`/tags/${tagId}/transactions`, { transactionIds }),
 }

@@ -1,45 +1,40 @@
 using Api.Data;
 using Microsoft.EntityFrameworkCore;
-using Riok.Mapperly.Abstractions;
 
 namespace Api.Features.Tags;
 
 public static partial class Tags
 {
-    public static partial class FetchAll
+    public static class FetchAll
     {
-        public record class Response(int Id, string Name);
-
-        [Mapper(RequiredMappingStrategy = RequiredMappingStrategy.Target)]
-        public partial class Mapper
-        {
-            public partial Response Map(Tag tag);
-        }
+        /// <summary>
+        /// <paramref name="TransactionCount"/> is what makes a delete confirmable and ranks the
+        /// most-used tags in the tag line, so it is part of the tag rather than a second request.
+        /// </summary>
+        public record class Response(int Id, string Name, int TransactionCount);
 
         public class Handler
         {
             private readonly BudgetDbContext _db;
-            private readonly Mapper _mapper;
 
-            public Handler(BudgetDbContext db, Mapper mapper)
+            public Handler(BudgetDbContext db)
             {
                 _db = db ?? throw new ArgumentNullException(nameof(db));
-                _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
             }
 
-            public async Task<List<Response>> HandleAsync(CancellationToken cancellationToken)
-            {
-                var tags = await _db.Tags
+            public async Task<List<Response>> HandleAsync(CancellationToken cancellationToken) =>
+                await _db.Tags
                     .OrderBy(t => t.Name)
+                    .Select(t => new Response(
+                        t.Id,
+                        t.Name,
+                        _db.TransactionTags.Count(tt => tt.TagId == t.Id)))
                     .ToListAsync(cancellationToken);
-                return tags.Select(_mapper.Map).ToList();
-            }
         }
     }
 
     public static IServiceCollection AddFetchAll(this IServiceCollection services) => services
-        .AddScoped<FetchAll.Handler>()
-        .AddSingleton<FetchAll.Mapper>();
+        .AddScoped<FetchAll.Handler>();
 
     public static IEndpointRouteBuilder MapFetchAll(this IEndpointRouteBuilder endpoints)
     {

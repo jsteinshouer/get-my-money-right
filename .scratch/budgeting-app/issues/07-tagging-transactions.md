@@ -43,3 +43,27 @@ Landed in `1beb815` on `feature/07-tagging-transactions`.
 - Tag names are unique by SQLite's default collation with no trimming, so `Vacation` and `vacation` can coexist. `Category` has the same gap — worth one ticket covering both rather than diverging.
 - Filtering takes one tag at a time. Multi-tag AND/OR is a separate ask.
 - `POST /api/tags` returns a `Location` of `/api/tags/{id}`, which serves `DELETE` but has no `GET`. Same shape as `Categories.Create`, which is backed by a fetch-one this ticket didn't ask for.
+
+## Comments — design round (2026-09-01)
+
+`/impeccable critique` scored the tag-editing interaction **19/40 (Poor)**, with measured evidence: at 27 tags the checkbox picker made an edit row **863px** tall (7.3× a normal row) with 33 tab stops before Save, and opening it at 390px pushed **257px** of horizontal overflow onto the page with the Actions column off-screen. The deeper finding was that the control answered "which tags does this row have?" when the household's question is "how much did the vacation cost?"
+
+**What changed**
+
+- **Bulk tagging.** Row selection plus a selection bar; `POST /api/tags/{tagId}/transactions` assigns to a whole selection in one request and reports `assignedCount` / `alreadyTaggedCount`, so the batch says what it changed.
+- **A closing figure.** The filtered list now closes on a total under a double rule — the tag-filtered list finally answers the question the tagging was for.
+- **The tag line replaces the checkbox list.** Type-ahead over existing tags, create-on-Enter, applied tags as removable marks, and the 5 most-used offered as one-click marks. Cost is O(1) in tag count: the same edit row measures **240px** at 27 tags.
+- **Tags can be created where they are needed**, so an investigation no longer leaves the page (and loses its filters) to invent "Vacation 2026".
+- **Case-insensitive, trimmed names for `Tag` *and* `Category`** (`NOCASE` collation + trim on write, migration `NormaliseTagAndCategoryNames`, which normalises existing rows first). Prerequisite for typing tags; the same gap in `Category` is closed in the same pass. It also fixes the sort, which used to put every capitalised name ahead of every lowercase one.
+- **Counted, confirmable tag delete.** `GET /api/tags` carries `transactionCount`; deleting asks "removed from N transactions?" and reports the count afterwards. Principle 2 — nothing disappears silently.
+- **The table no longer dictates the page's scroll.** Wrapped in its own scroll box, with the Actions column sticky to the right so Save and Delete are reachable at any width, and Account/Need-Want/selection dropped below 46rem. Measured: **no page overflow at 390px or 1440px**, in both list and edit states.
+
+**Two defects found by the work itself**
+
+- Pressing Enter to create a tag and clicking Save before the round-trip finished **silently dropped the tag**. Save is now disabled while a tag is being created.
+- The suggestion slip was clipped by the table's scroll box on the last row; it now opens upward when there is no room below.
+
+**Still open**
+
+- Multi-tag filtering (AND/OR) remains out; the filter takes one tag.
+- Filters are still not written back to the URL, so a tag-filtered view is not linkable. Much less pressing now that tags are created in place.

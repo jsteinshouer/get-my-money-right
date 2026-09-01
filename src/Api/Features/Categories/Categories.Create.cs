@@ -42,7 +42,7 @@ public static partial class Categories
             {
                 var category = new Category
                 {
-                    Name = command.Name,
+                    Name = command.Name.Trim(),
                     CreatedByUserId = createdByUserId,
                 };
                 _db.Categories.Add(category);

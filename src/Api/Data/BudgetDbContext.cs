@@ -31,6 +31,13 @@ public class BudgetDbContext : IdentityDbContext<ApplicationUser>
             .HasForeignKey(a => a.CreatedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // NOCASE makes the unique index reject "Groceries" against "groceries", and makes the
+        // name sort the way a person reads it rather than putting every capital ahead of every
+        // lowercase letter.
+        builder.Entity<Categories.Category>()
+            .Property(c => c.Name)
+            .UseCollation("NOCASE");
+
         builder.Entity<Categories.Category>()
             .HasIndex(c => c.Name)
             .IsUnique();
@@ -76,6 +83,10 @@ public class BudgetDbContext : IdentityDbContext<ApplicationUser>
             .WithMany()
             .HasForeignKey(b => b.CategoryId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Tags.Tag>()
+            .Property(t => t.Name)
+            .UseCollation("NOCASE");
 
         builder.Entity<Tags.Tag>()
             .HasIndex(t => t.Name)

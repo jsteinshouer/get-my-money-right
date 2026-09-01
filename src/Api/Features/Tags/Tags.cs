@@ -26,7 +26,8 @@ public static partial class Tags
         .AddDelete()
         .AddFetchAll()
         .AddAssignToTransaction()
-        .AddRemoveFromTransaction();
+        .AddRemoveFromTransaction()
+        .AddAssignToManyTransactions();
 
     public static IEndpointRouteBuilder MapTagsFeature(this IEndpointRouteBuilder endpoints)
     {
@@ -34,7 +35,7 @@ public static partial class Tags
             .WithTags("Tags")
             .AddFluentValidationAutoValidation()
             .RequireAuthorization();
-        tags.MapCreate().MapDelete().MapFetchAll();
+        tags.MapCreate().MapDelete().MapFetchAll().MapAssignToManyTransactions();
 
         // Assignments hang off the transaction they belong to, not off the tag.
         var transactionTags = endpoints.MapGroup("transactions/{transactionId:int}/tags")

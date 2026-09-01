@@ -42,7 +42,7 @@ public static partial class Tags
             {
                 var tag = new Tag
                 {
-                    Name = command.Name,
+                    Name = command.Name.Trim(),
                     CreatedByUserId = createdByUserId,
                 };
                 _db.Tags.Add(tag);
