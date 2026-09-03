@@ -67,3 +67,33 @@ Landed in `1beb815` on `feature/07-tagging-transactions`.
 
 - Multi-tag filtering (AND/OR) remains out; the filter takes one tag.
 - Filters are still not written back to the URL, so a tag-filtered view is not linkable. Much less pressing now that tags are created in place.
+
+## Comments — edit interaction (2026-09-03)
+
+A second `/impeccable critique`, scoped to editing a transaction, scored **17/40 (Poor)** — lower than the 19/40 of the first round, because it targeted the part left structurally untouched. Measured: the inline edit row had **6 distinct control tops across a 72px spread** with three different control heights, and the Amount input was **61px wide for 78px of content**, rendering `-25` for `-25.50`.
+
+**The P0 that mattered most:** the edit row was not inside a `<form>`, so `required` was inert; the save guard checked only account/category/Need-Want; `Number('')` is `0`; and the server has no Amount rule. **Clearing Amount silently wrote 0.00 to the ledger** — and the closing total added in the previous round would then report a confidently wrong figure.
+
+**What replaced the inline edit row**
+
+- **Category and Need/Want are now edited in the ledger itself**, committing on change with the struck-rule busy state. PRODUCT.md says categorisation is a batch worked as a queue where imported rows already carry date, amount, description and account — so the queue is two fields per entry, with no mode to enter or leave.
+- **Full correction moved to a correction slip**: a `colSpan` ruled panel opening beneath the entry, which stays on its line marked with an oxblood left rule. It is a real `<form>`, so Enter commits, and it uses the same labelled grid and the same ledger field order as the Add form — which previously described the same entity in a second layout and a third field order.
+- Validation runs in one place with the project's own voice, printed **beside the field**, not at the top of a 6000px page.
+- **Escape** cancels the correction from anywhere on the slip; the tag combobox keeps Escape only while its suggestions are open.
+- Opening a correction while another is **dirty** now asks before discarding. It used to vanish without a word.
+- **Deleting an entry states what it is destroying** — description, amount and date — matching the tag delete added last round. The safeguards were previously inverted.
+- **Rows are never tinted.** DESIGN.md refuses it by name; selection and correction are marked with a rule instead.
+
+**Three defects the work surfaced**
+
+- The tag suggestion list was **permanently open** — it opened whenever options existed, regardless of focus — and covered whatever sat beneath it. It now opens only when the writer types or arrows down.
+- Re-focusing the tag input after a pick sprang the list open again, over the Save button.
+- `.tag-combobox input:focus-visible { outline: none }` from the previous round had removed the focus ring from the tag input alone.
+
+**The sticky closing column is gone.** Introduced two rounds ago, it caused three separate defects: it permanently hid ~38px of tag content on desktop and ~55px on mobile where it could not be scrolled to, it silently captured the correction slip's full-width cell, and its compensating gutter forced the table to scroll at all times. Instead the ledger now runs to the full viewport width above 78rem, since a ledger spread is data rather than prose — **no horizontal scrolling on desktop in either state**, and nothing hidden anywhere.
+
+**Still open**
+
+- Multi-tag filtering (AND/OR).
+- Filters are still not written to the URL, so a filtered view is not linkable.
+- Below 46rem the ledger drops Account, Need/Want and selection to control width; the correction slip carries every field on a phone, but in-row Need/Want reclassification is desk-only.

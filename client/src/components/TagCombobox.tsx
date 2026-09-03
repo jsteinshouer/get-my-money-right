@@ -33,6 +33,7 @@ export function TagCombobox({
   const [activeIndex, setActiveIndex] = useState(NO_ACTIVE_OPTION)
   const [busy, setBusy] = useState(false)
   const [openAbove, setOpenAbove] = useState(false)
+  const [suggesting, setSuggesting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const listboxId = useId()
   const optionId = (index: number) => `${listboxId}-option-${index}`
@@ -50,7 +51,9 @@ export function TagCombobox({
   const isExisting = trimmed !== '' && tags.some((tag) => tag.name.toLowerCase() === trimmed.toLowerCase())
   const canCreate = trimmed !== '' && !isExisting
   const optionCount = matches.length + (canCreate ? 1 : 0)
-  const isOpen = optionCount > 0
+  // Only once the writer has asked for it — by typing, or by arrowing down. Springing open on
+  // focus, or again after a tag is picked, puts a slip over whatever sits beneath the line.
+  const isOpen = suggesting && optionCount > 0
   const createIndex = canCreate ? matches.length : NO_ACTIVE_OPTION
 
   // The slip lives inside the table's own scroll box, which clips it; near the foot of the
@@ -67,6 +70,7 @@ export function TagCombobox({
   function reset() {
     setQuery('')
     setActiveIndex(NO_ACTIVE_OPTION)
+    setSuggesting(false)
   }
 
   function pick(tag: Tag) {
@@ -107,6 +111,7 @@ export function TagCombobox({
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
+      setSuggesting(true)
       if (optionCount === 0) return
       const step = event.key === 'ArrowDown' ? 1 : -1
       const next = activeIndex === NO_ACTIVE_OPTION ? (step === 1 ? 0 : optionCount - 1) : activeIndex + step
@@ -143,7 +148,10 @@ export function TagCombobox({
         onChange={(e) => {
           setQuery(e.target.value)
           setActiveIndex(NO_ACTIVE_OPTION)
+          setSuggesting(true)
         }}
+        // Options commit on mousedown with preventDefault, so blur never races a pick.
+        onBlur={() => setSuggesting(false)}
         onKeyDown={handleKeyDown}
       />
       <ul

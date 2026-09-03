@@ -160,7 +160,7 @@ thead th,
   display: grid;
   gap: var(--gap-4);
   grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
-  align-items: end;
+  align-items: start;
 }
 
 /* --- the ruled panel ------------------------------------------------------ */
@@ -400,8 +400,7 @@ td.money, th.money { text-align: right; font-variant-numeric: tabular-nums linin
   border-bottom: 1px solid var(--rule-strong);
 }
 
-.tag-combobox input:focus { border-bottom-color: var(--signal); outline: none; }
-.tag-combobox input:focus-visible { outline: none; }
+.tag-combobox input:focus { border-bottom-color: var(--signal); }
 
 /* The ruled slip a suggestion list is: square, hairline-ruled, never a floating card. */
 .tag-suggestions {
@@ -424,6 +423,7 @@ td.money, th.money { text-align: right; font-variant-numeric: tabular-nums linin
 .tag-suggestions.is-above { top: auto; bottom: 100%; }
 
 .tag-suggestions[hidden] { display: none; }
+.tag-suggestions:focus { outline: none; }
 
 .tag-suggestions li {
   display: flex;
@@ -505,8 +505,11 @@ td.money, th.money { text-align: right; font-variant-numeric: tabular-nums linin
   white-space: nowrap;
 }
 
-tbody tr[data-selected='true'] { background: var(--paper-sunk); }
-tbody tr.is-editing { background: var(--paper-field); }
+tbody tr[data-selected='true'] td:first-child { box-shadow: inset 3px 0 0 var(--rule-strong); }
+tbody tr[data-correcting='true'] td:first-child { box-shadow: inset 3px 0 0 var(--signal); }
+
+/* The entry being corrected keeps its rule with the slip below it. */
+tbody tr[data-correcting='true'] td { border-bottom-color: transparent; }
 
 /* --- the closing figure of a filtered list -------------------------------- */
 
@@ -528,6 +531,67 @@ tfoot .ledger-close td.money {
   text-transform: none;
   font-variant-numeric: tabular-nums lining-nums;
 }
+
+/* --- the correction slip: a correction is written beneath its entry --------- */
+
+tr.correction > td {
+  padding: 0;
+  border-bottom: 1px solid var(--rule);
+  border-left: 0;
+}
+
+/* Pasted onto the page over the entry it corrects: oxblood down the left, as a correction
+   mark always was, and never a floating card. */
+.correction-slip {
+  padding: var(--gap-4) var(--gap-5) var(--gap-5);
+  background: var(--paper-field);
+  border-top: 1px solid var(--signal);
+  border-left: 3px solid var(--signal);
+  width: min(100%, 60rem);
+}
+
+.correction-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--gap-2) var(--gap-3);
+  padding-bottom: var(--gap-3);
+  margin-bottom: var(--gap-4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.correction-head h3 {
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--signal);
+}
+
+.correction-head p { margin: 0; color: var(--ink-2); }
+
+.correction-tags { margin-bottom: var(--gap-4); }
+
+.correction-tags-label {
+  display: block;
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: var(--gap-2);
+}
+
+.correction-actions { display: flex; flex-wrap: wrap; gap: var(--gap-2); }
+
+/* The problem is named where the field is, not at the top of a six-thousand-pixel page. */
+.field-error { color: var(--signal); font-weight: 550; }
+input[aria-invalid='true'] { border-color: var(--signal); }
+
+/* An entry saving a reclassification strikes its own rule, like any other work in progress. */
+tbody tr[aria-busy='true'] td { border-bottom-color: var(--signal); }
 
 /* --- a confirmation, printed in the page rather than over it -------------- */
 
@@ -582,27 +646,47 @@ tfoot .ledger-close td.money {
 .table-scroll { overflow-x: auto; margin-block: var(--gap-4); }
 .table-scroll > table { margin-block: 0; }
 
-/* Sticky cells paint over what scrolls beneath them, so every row states its own ground. */
-.table-scroll thead tr, .table-scroll tfoot tr, .table-scroll tbody tr { background: var(--paper); }
-.table-scroll tbody tr[data-selected='true'] { background: var(--paper-sunk); }
-.table-scroll tbody tr.is-editing { background: var(--paper-field); }
-
-/* The closing column travels with the reader: at any width, Save and Delete stay reachable
-   instead of being hunted for sideways. */
-.table-scroll th:last-child,
-.table-scroll td:last-child {
-  position: sticky;
-  right: 0;
-  z-index: 1;
-  background: inherit;
-  border-left: 1px solid var(--signal-soft);
+/* A ledger spread is data, not prose. Where the screen allows, it runs wider than the reading
+   shell rather than being scrolled sideways inside it. */
+@media (min-width: 78rem) {
+  .table-scroll {
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100vw - 2 * var(--gap-5));
+    max-width: 84rem;
+  }
 }
 
-.table-scroll thead th:last-child { z-index: 2; }
+/* No sticky closing column. It was tried, and each version parked real content underneath
+   itself where it could not be scrolled to: first the tag marks, then the correction slip.
+   A ruled table that is wider than its box is scrolled sideways like any other — nothing is
+   hidden, and the correction slip is full width once open, so the actions are never the only
+   way to work an entry. */
+
+/* The two fields the queue changes sit in the ledger itself, so they read as values that
+   happen to be editable rather than as a form dropped into a table. */
+tbody td > select {
+  margin-top: 0;
+  min-width: 8.5rem;
+  padding: 0.2rem 1.6rem 0.2rem 0.3rem;
+  font-size: 0.92rem;
+  background-color: transparent;
+  border-color: transparent;
+  background-position: calc(100% - 0.75rem) 55%, calc(100% - 0.45rem) 55%;
+}
+
+tbody .col-needwant > select { min-width: 6rem; }
+
+tbody td > select:hover { border-color: var(--rule-strong); background-color: var(--paper-raised); }
+tbody td > select:focus { border-color: var(--signal); background-color: var(--paper-raised); }
+
+/* Tag marks are what the investigation reads; the column must be wide enough to carry one. */
+.col-tags { min-width: 9rem; }
 
 /* A date and a row's actions are single objects: neither ever breaks across two lines. */
 .col-date { white-space: nowrap; }
-.table-scroll th:last-child, .table-scroll td:last-child { white-space: nowrap; }
+.table-scroll th:last-child, .table-scroll tr:not(.correction) > td:last-child { white-space: nowrap; }
 
 /* The date picker's native control makes this the widest column in the ledger otherwise. */
 .table-scroll td input[type='date'] { min-width: 8.5rem; }

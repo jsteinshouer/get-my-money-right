@@ -64,18 +64,18 @@ test('a tag written onto a transaction is created in place and filters the list'
 
   // The tag does not exist yet: it is invented at the moment the transaction needs it,
   // without leaving the page for the tag manager.
-  await page.getByRole('row').filter({ hasText: taggedDescription }).getByRole('button', { name: 'Edit' }).click()
-  const editingRow = page.getByRole('row').filter({ has: page.getByRole('textbox', { name: 'Description' }) })
-  await expect(editingRow.getByRole('textbox', { name: 'Description' })).toHaveValue(taggedDescription)
+  await page.getByRole('row').filter({ hasText: taggedDescription }).getByRole('button', { name: 'Correct' }).click()
+  const slip = page.getByRole('row').filter({ has: page.getByRole('heading', { name: 'Correcting this entry' }) })
+  await expect(slip.getByLabel('Description')).toHaveValue(taggedDescription)
 
-  const tagInput = editingRow.getByRole('combobox', { name: 'Add a tag' })
+  const tagInput = slip.getByRole('combobox', { name: 'Add a tag' })
   await tagInput.fill(tagName)
-  await expect(editingRow.getByRole('option', { name: `New tag “${tagName}”` })).toBeVisible()
+  await expect(slip.getByRole('option', { name: `New tag “${tagName}”` })).toBeVisible()
   await tagInput.press('Enter')
   // The remove control only exists for a tag that is actually applied, so this waits for the
   // create round-trip rather than matching the "New tag" suggestion still on screen.
-  await expect(editingRow.getByRole('button', { name: `Remove tag ${tagName}` })).toBeVisible()
-  await editingRow.getByRole('button', { name: 'Save' }).click()
+  await expect(slip.getByRole('button', { name: `Remove tag ${tagName}` })).toBeVisible()
+  await slip.getByRole('button', { name: 'Save correction' }).click()
 
   const taggedRow = page.getByRole('row').filter({ hasText: taggedDescription })
   await expect(taggedRow.getByText(tagName)).toBeVisible()

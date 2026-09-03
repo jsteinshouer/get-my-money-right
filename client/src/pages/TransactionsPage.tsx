@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { accountsApi, type Account } from '../api/accounts'
 import { ApiError } from '../api/client'
@@ -7,10 +7,12 @@ import { tagsApi, type Tag } from '../api/tags'
 import { transactionsApi, type NeedWant, type Transaction, type TransactionInput } from '../api/transactions'
 import { AccountSelect } from '../components/AccountSelect'
 import { CategorySelect } from '../components/CategorySelect'
+import { CorrectionSlip, type Correction } from '../components/CorrectionSlip'
 import { NeedWantSelect } from '../components/NeedWantSelect'
 import { TagCombobox } from '../components/TagCombobox'
-import { TagLine } from '../components/TagLine'
 import { TagSelect } from '../components/TagSelect'
+
+const COLUMN_COUNT = 9
 
 const emptyForm = {
   accountId: '' as number | '',
@@ -28,7 +30,12 @@ export function TransactionsPage() {
   const [tags, setTags] = useState<Tag[]>([])
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [correctingId, setCorrectingId] = useState<number | null>(null)
+  const [correctionDirty, setCorrectionDirty] = useState(false)
+  const [savingCorrection, setSavingCorrection] = useState(false)
+  const [pendingCorrectId, setPendingCorrectId] = useState<number | null>(null)
+  const [deleting, setDeleting] = useState<Transaction | null>(null)
+  const [busyRowId, setBusyRowId] = useState<number | null>(null)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [applying, setApplying] = useState(false)
 
@@ -112,6 +119,74 @@ export function TransactionsPage() {
     }
   }
 
+  /** The queue job: reclassify one field on an entry without entering a mode. */
+  async function reclassify(transaction: Transaction, change: Partial<TransactionInput>) {
+    setError(null)
+    setBusyRowId(transaction.id)
+    try {
+      await transactionsApi.update(transaction.id, {
+        accountId: transaction.accountId,
+        categoryId: transaction.categoryId,
+        date: transaction.date,
+        amount: transaction.amount,
+        description: transaction.description,
+        needWant: transaction.needWant,
+        ...change,
+      })
+      await load()
+    } catch {
+      setError('Failed to save that change.')
+    } finally {
+      setBusyRowId(null)
+    }
+  }
+
+  function requestCorrection(transactionId: number) {
+    if (correctingId !== null && correctingId !== transactionId && correctionDirty) {
+      // Unsaved corrections used to vanish without a word when another entry was opened.
+      setPendingCorrectId(transactionId)
+      return
+    }
+    setCorrectingId(transactionId)
+  }
+
+  async function saveCorrection(transaction: Transaction, correction: Correction) {
+    setError(null)
+    setSavingCorrection(true)
+    try {
+      await transactionsApi.update(transaction.id, correction.input)
+    } catch (err) {
+      setSavingCorrection(false)
+      setError(
+        err instanceof ApiError && err.status === 409
+          ? 'That account or category no longer exists.'
+          : 'Failed to save the correction.',
+      )
+      return
+    }
+
+    // Tags live behind their own assign/remove endpoints, so only what actually changed is sent.
+    // The entry itself is saved by this point, so a failure here still closes the slip and
+    // reloads: the ledger then shows which tag changes stuck.
+    try {
+      await Promise.all([
+        ...correction.tagIds
+          .filter((id) => !transaction.tagIds.includes(id))
+          .map((id) => tagsApi.assign(transaction.id, id)),
+        ...transaction.tagIds
+          .filter((id) => !correction.tagIds.includes(id))
+          .map((id) => tagsApi.remove(transaction.id, id)),
+      ])
+    } catch {
+      setError('The entry was corrected, but its tags could not all be updated.')
+    } finally {
+      setSavingCorrection(false)
+      setCorrectingId(null)
+      setCorrectionDirty(false)
+      await Promise.all([load(), loadTags()])
+    }
+  }
+
   async function handleAdd(event: FormEvent) {
     event.preventDefault()
     if (form.accountId === '' || form.categoryId === '' || form.needWant === '') {
@@ -142,10 +217,14 @@ export function TransactionsPage() {
     }
   }
 
-  async function handleDelete(id: number) {
+  async function confirmDelete(transaction: Transaction) {
     setError(null)
+    setNotice(null)
+    setDeleting(null)
     try {
-      await transactionsApi.delete(id)
+      await transactionsApi.delete(transaction.id)
+      setNotice(`Deleted “${transaction.description}” of ${transaction.amount.toFixed(2)} on ${transaction.date}.`)
+      if (correctingId === transaction.id) setCorrectingId(null)
       await load()
     } catch {
       setError('Failed to delete the transaction.')
@@ -159,8 +238,7 @@ export function TransactionsPage() {
     try {
       const result = await tagsApi.assignToMany(tag.id, selectedIds)
       // Counted, never silent: the household is told what the batch changed and what it left.
-      const already =
-        result.alreadyTaggedCount > 0 ? ` ${result.alreadyTaggedCount} already carried it.` : ''
+      const already = result.alreadyTaggedCount > 0 ? ` ${result.alreadyTaggedCount} already carried it.` : ''
       setNotice(
         `Tagged ${result.assignedCount} ${result.assignedCount === 1 ? 'transaction' : 'transactions'} “${tag.name}”.${already}`,
       )
@@ -177,10 +255,6 @@ export function TransactionsPage() {
     return accounts.find((a) => a.id === accountId)?.name ?? 'Unknown account'
   }
 
-  function categoryName(categoryId: number) {
-    return categories.find((c) => c.id === categoryId)?.name ?? 'Unknown category'
-  }
-
   function tagNames(tagIds: number[]) {
     return tagIds
       .map((tagId) => tags.find((t) => t.id === tagId)?.name)
@@ -193,10 +267,7 @@ export function TransactionsPage() {
   )
 
   const allSelected = transactions !== null && transactions.length > 0 && selectedIds.length === transactions.length
-
-  function toggleAll(checked: boolean) {
-    setSelectedIds(checked ? (transactions ?? []).map((t) => t.id) : [])
-  }
+  const pendingCorrectTarget = transactions?.find((t) => t.id === pendingCorrectId) ?? null
 
   return (
     <>
@@ -204,6 +275,46 @@ export function TransactionsPage() {
 
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status" className="notice">{notice}</p>}
+
+      {deleting !== null && (
+        <div className="confirm" role="alertdialog" aria-labelledby="confirm-delete-transaction">
+          <p id="confirm-delete-transaction">
+            Delete “{deleting.description}” — {deleting.amount.toFixed(2)} on {deleting.date}? This removes the entry
+            from the ledger for good.
+          </p>
+          <div className="confirm-actions">
+            <button className="contrast" onClick={() => void confirmDelete(deleting)}>
+              Delete entry
+            </button>
+            <button className="secondary" onClick={() => setDeleting(null)}>
+              Keep it
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pendingCorrectTarget !== null && (
+        <div className="confirm" role="alertdialog" aria-labelledby="confirm-discard-correction">
+          <p id="confirm-discard-correction">
+            You have an unsaved correction open. Discard it and correct “{pendingCorrectTarget.description}” instead?
+          </p>
+          <div className="confirm-actions">
+            <button
+              className="contrast"
+              onClick={() => {
+                setCorrectingId(pendingCorrectTarget.id)
+                setCorrectionDirty(false)
+                setPendingCorrectId(null)
+              }}
+            >
+              Discard and move on
+            </button>
+            <button className="secondary" onClick={() => setPendingCorrectId(null)}>
+              Keep correcting
+            </button>
+          </div>
+        </div>
+      )}
 
       <article>
         <h2>Filters</h2>
@@ -256,9 +367,7 @@ export function TransactionsPage() {
 
       {selectedIds.length > 0 && (
         <div className="selection-bar" role="region" aria-label="Tag the selected transactions">
-          <p className="selection-count">
-            {selectedIds.length} selected
-          </p>
+          <p className="selection-count">{selectedIds.length} selected</p>
           <TagCombobox
             label="Tag the selected transactions"
             placeholder="Write a tag to apply…"
@@ -287,7 +396,7 @@ export function TransactionsPage() {
                     type="checkbox"
                     aria-label="Select all transactions"
                     checked={allSelected}
-                    onChange={(e) => toggleAll(e.target.checked)}
+                    onChange={(e) => setSelectedIds(e.target.checked ? transactions.map((t) => t.id) : [])}
                   />
                 </th>
                 <th scope="col" className="col-date">Date</th>
@@ -296,70 +405,43 @@ export function TransactionsPage() {
                 <th scope="col">Description</th>
                 <th scope="col" className="money">Amount</th>
                 <th scope="col" className="col-needwant">Need/Want</th>
-                <th scope="col">Tags</th>
+                <th scope="col" className="col-tags">Tags</th>
                 <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {transactions.map((transaction) =>
-                editingId === transaction.id ? (
-                  <EditRow
-                    key={transaction.id}
-                    transaction={transaction}
-                    accounts={accounts}
-                    categories={categories}
-                    tags={tags}
-                    onCreateTag={createTag}
-                    onDone={() => setEditingId(null)}
-                    onSaved={load}
-                    onError={setError}
-                  />
-                ) : (
-                  <tr key={transaction.id} data-selected={selectedIds.includes(transaction.id)}>
-                    <td className="col-select">
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${transaction.description}`}
-                        checked={selectedIds.includes(transaction.id)}
-                        onChange={(e) =>
-                          setSelectedIds(
-                            e.target.checked
-                              ? [...selectedIds, transaction.id]
-                              : selectedIds.filter((id) => id !== transaction.id),
-                          )
-                        }
-                      />
-                    </td>
-                    <td className="col-date">{transaction.date}</td>
-                    <td className="col-account">{accountName(transaction.accountId)}</td>
-                    <td>{categoryName(transaction.categoryId)}</td>
-                    <td>{transaction.description}</td>
-                    <td className="money">{transaction.amount.toFixed(2)}</td>
-                    <td className="col-needwant">{transaction.needWant}</td>
-                    <td>
-                      {transaction.tagIds.length === 0 ? (
-                        <span className="tag-none">—</span>
-                      ) : (
-                        <ul className="tag-marks">
-                          {tagNames(transaction.tagIds).map((name) => (
-                            <li key={name}>
-                              <span className="tag-mark">{name}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </td>
-                    <td>
-                      <button className="secondary" onClick={() => setEditingId(transaction.id)}>
-                        Edit
-                      </button>{' '}
-                      <button className="contrast" onClick={() => void handleDelete(transaction.id)}>
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ),
-              )}
+              {transactions.map((transaction) => (
+                <Entry
+                  key={transaction.id}
+                  transaction={transaction}
+                  accounts={accounts}
+                  categories={categories}
+                  tags={tags}
+                  accountName={accountName}
+                  tagNames={tagNames}
+                  busy={busyRowId === transaction.id}
+                  correcting={correctingId === transaction.id}
+                  selected={selectedIds.includes(transaction.id)}
+                  savingCorrection={savingCorrection}
+                  onSelect={(checked) =>
+                    setSelectedIds(
+                      checked
+                        ? [...selectedIds, transaction.id]
+                        : selectedIds.filter((id) => id !== transaction.id),
+                    )
+                  }
+                  onReclassify={reclassify}
+                  onCorrect={() => requestCorrection(transaction.id)}
+                  onCancelCorrection={() => {
+                    setCorrectingId(null)
+                    setCorrectionDirty(false)
+                  }}
+                  onDirtyChange={setCorrectionDirty}
+                  onSaveCorrection={(correction) => void saveCorrection(transaction, correction)}
+                  onCreateTag={createTag}
+                  onDelete={() => setDeleting(transaction)}
+                />
+              ))}
             </tbody>
             <tfoot>
               <tr className="ledger-close">
@@ -380,7 +462,18 @@ export function TransactionsPage() {
       <article>
         <h2>Add a transaction</h2>
         <form onSubmit={handleAdd}>
+          {/* Ledger order, the same order the correction slip uses. */}
           <div className="grid">
+            <label htmlFor="new-transaction-date">
+              Date
+              <input
+                id="new-transaction-date"
+                type="date"
+                value={form.date}
+                onChange={(e) => setForm({ ...form, date: e.target.value })}
+                required
+              />
+            </label>
             <label htmlFor="new-transaction-account">
               Account
               <AccountSelect
@@ -401,24 +494,14 @@ export function TransactionsPage() {
                 required
               />
             </label>
-            <label htmlFor="new-transaction-need-want">
-              Need/Want
-              <NeedWantSelect
-                id="new-transaction-need-want"
-                value={form.needWant}
-                onChange={(needWant) => setForm({ ...form, needWant })}
-                required
-              />
-            </label>
           </div>
           <div className="grid">
-            <label htmlFor="new-transaction-date">
-              Date
+            <label htmlFor="new-transaction-description">
+              Description
               <input
-                id="new-transaction-date"
-                type="date"
-                value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
+                id="new-transaction-description"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
                 required
               />
             </label>
@@ -434,12 +517,12 @@ export function TransactionsPage() {
               />
               <small>Negative for money out, positive for money in.</small>
             </label>
-            <label htmlFor="new-transaction-description">
-              Description
-              <input
-                id="new-transaction-description"
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
+            <label htmlFor="new-transaction-need-want">
+              Need/Want
+              <NeedWantSelect
+                id="new-transaction-need-want"
+                value={form.needWant}
+                onChange={(needWant) => setForm({ ...form, needWant })}
                 required
               />
             </label>
@@ -453,115 +536,116 @@ export function TransactionsPage() {
   )
 }
 
-function EditRow({
+function Entry({
   transaction,
   accounts,
   categories,
   tags,
+  accountName,
+  tagNames,
+  busy,
+  correcting,
+  selected,
+  savingCorrection,
+  onSelect,
+  onReclassify,
+  onCorrect,
+  onCancelCorrection,
+  onDirtyChange,
+  onSaveCorrection,
   onCreateTag,
-  onDone,
-  onSaved,
-  onError,
+  onDelete,
 }: {
   transaction: Transaction
   accounts: Account[]
   categories: Category[]
   tags: Tag[]
+  accountName: (accountId: number) => string
+  tagNames: (tagIds: number[]) => string[]
+  busy: boolean
+  correcting: boolean
+  selected: boolean
+  savingCorrection: boolean
+  onSelect: (checked: boolean) => void
+  onReclassify: (transaction: Transaction, change: Partial<TransactionInput>) => void
+  onCorrect: () => void
+  onCancelCorrection: () => void
+  onDirtyChange: (dirty: boolean) => void
+  onSaveCorrection: (correction: Correction) => void
   onCreateTag: (name: string) => Promise<Tag | null>
-  onDone: () => void
-  onSaved: () => Promise<void>
-  onError: (message: string) => void
+  onDelete: () => void
 }) {
-  const [accountId, setAccountId] = useState<number | ''>(transaction.accountId)
-  const [categoryId, setCategoryId] = useState<number | ''>(transaction.categoryId)
-  const [date, setDate] = useState(transaction.date)
-  const [amount, setAmount] = useState(String(transaction.amount))
-  const [description, setDescription] = useState(transaction.description)
-  const [needWant, setNeedWant] = useState<NeedWant | ''>(transaction.needWant)
-  const [tagIds, setTagIds] = useState<number[]>(transaction.tagIds)
-  const [saving, setSaving] = useState(false)
-  const [creatingTag, setCreatingTag] = useState(false)
-  const originalTagIds = useRef(transaction.tagIds)
-
-  async function handleSave() {
-    if (accountId === '' || categoryId === '' || needWant === '') {
-      onError('Account, category, and Need/Want are required.')
-      return
-    }
-
-    setSaving(true)
-
-    try {
-      const input: TransactionInput = { accountId, categoryId, date, amount: Number(amount), description, needWant }
-      await transactionsApi.update(transaction.id, input)
-    } catch (err) {
-      // Nothing was persisted, so the row stays open with the edits still in it.
-      setSaving(false)
-      if (err instanceof ApiError && err.status === 409) {
-        onError('That account or category no longer exists.')
-      } else {
-        onError('Failed to save the transaction.')
-      }
-      return
-    }
-
-    // Tags live behind their own assign/remove endpoints, so only what actually changed is sent.
-    // The transaction itself is saved by this point, so a failure here closes the row and reloads
-    // anyway: the list then shows which tag changes stuck, rather than leaving the form to retry
-    // against a baseline the server has already moved past.
-    const original = originalTagIds.current
-    try {
-      await Promise.all([
-        ...tagIds.filter((id) => !original.includes(id)).map((id) => tagsApi.assign(transaction.id, id)),
-        ...original.filter((id) => !tagIds.includes(id)).map((id) => tagsApi.remove(transaction.id, id)),
-      ])
-    } catch {
-      onError('The transaction was saved, but its tags could not all be updated.')
-    } finally {
-      setSaving(false)
-      onDone()
-      await onSaved()
-    }
-  }
-
   return (
-    <tr className="is-editing">
-      <td className="col-select" />
-      <td className="col-date">
-        <input aria-label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-      </td>
-      <td className="col-account">
-        <AccountSelect label="Account" accounts={accounts} value={accountId} onChange={setAccountId} required />
-      </td>
-      <td>
-        <CategorySelect label="Category" categories={categories} value={categoryId} onChange={setCategoryId} required />
-      </td>
-      <td>
-        <input aria-label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
-      </td>
-      <td className="money">
-        <input aria-label="Amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
-      </td>
-      <td className="col-needwant">
-        <NeedWantSelect label="Need/Want" value={needWant} onChange={setNeedWant} required />
-      </td>
-      <td>
-        <TagLine
+    <>
+      <tr data-selected={selected} data-correcting={correcting} aria-busy={busy}>
+        <td className="col-select">
+          <input
+            type="checkbox"
+            aria-label={`Select ${transaction.description}`}
+            checked={selected}
+            onChange={(e) => onSelect(e.target.checked)}
+          />
+        </td>
+        <td className="col-date">{transaction.date}</td>
+        <td className="col-account">{accountName(transaction.accountId)}</td>
+        {/* Category and Need/Want carry the queue: an imported entry arrives with everything
+            else already right, so these two change in place rather than through a form. */}
+        <td>
+          <CategorySelect
+            label={`Category for ${transaction.description}`}
+            categories={categories}
+            value={transaction.categoryId}
+            onChange={(categoryId) => categoryId !== '' && onReclassify(transaction, { categoryId })}
+            required
+          />
+        </td>
+        <td>{transaction.description}</td>
+        <td className="money">{transaction.amount.toFixed(2)}</td>
+        <td className="col-needwant">
+          <NeedWantSelect
+            label={`Need or Want for ${transaction.description}`}
+            value={transaction.needWant}
+            onChange={(needWant) => needWant !== '' && onReclassify(transaction, { needWant })}
+            required
+          />
+        </td>
+        <td className="col-tags">
+          {transaction.tagIds.length === 0 ? (
+            <span className="tag-none">—</span>
+          ) : (
+            <ul className="tag-marks">
+              {tagNames(transaction.tagIds).map((name) => (
+                <li key={name}>
+                  <span className="tag-mark">{name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </td>
+        <td>
+          <button className="secondary" aria-expanded={correcting} onClick={onCorrect}>
+            Correct
+          </button>{' '}
+          <button className="contrast" onClick={onDelete}>
+            Delete
+          </button>
+        </td>
+      </tr>
+
+      {correcting && (
+        <CorrectionSlip
+          transaction={transaction}
+          accounts={accounts}
+          categories={categories}
           tags={tags}
-          selectedIds={tagIds}
-          onChange={setTagIds}
-          onCreate={onCreateTag}
-          onBusyChange={setCreatingTag}
+          columnCount={COLUMN_COUNT}
+          saving={savingCorrection}
+          onCreateTag={onCreateTag}
+          onDirtyChange={onDirtyChange}
+          onCancel={onCancelCorrection}
+          onSave={onSaveCorrection}
         />
-      </td>
-      <td>
-        <button aria-busy={saving || creatingTag} disabled={saving || creatingTag} onClick={() => void handleSave()}>
-          Save
-        </button>{' '}
-        <button className="secondary" onClick={onDone}>
-          Cancel
-        </button>
-      </td>
-    </tr>
+      )}
+    </>
   )
 }
