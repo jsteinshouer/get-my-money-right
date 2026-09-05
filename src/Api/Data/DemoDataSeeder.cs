@@ -105,6 +105,9 @@ public class DemoDataSeeder
     /// </summary>
     private async Task DeleteEverythingAsync(CancellationToken cancellationToken)
     {
+        // Tags first: their assignments cascade away with the transactions, but a tag itself points
+        // at the user who created it and would block the user delete below.
+        await _db.Tags.ExecuteDeleteAsync(cancellationToken);
         await _db.Transactions.ExecuteDeleteAsync(cancellationToken);
         await _db.Budgets.ExecuteDeleteAsync(cancellationToken);
         await _db.Categories.ExecuteDeleteAsync(cancellationToken);

@@ -3,9 +3,9 @@ using Api.Data;
 using FluentValidation;
 using Riok.Mapperly.Abstractions;
 
-namespace Api.Features.Categories;
+namespace Api.Features.Tags;
 
-public static partial class Categories
+public static partial class Tags
 {
     public static partial class Create
     {
@@ -24,7 +24,7 @@ public static partial class Categories
         [Mapper(RequiredMappingStrategy = RequiredMappingStrategy.Target)]
         public partial class Mapper
         {
-            public partial Response Map(Category category);
+            public partial Response Map(Tag tag);
         }
 
         public class Handler
@@ -40,14 +40,14 @@ public static partial class Categories
 
             public async Task<Response> HandleAsync(Command command, string createdByUserId, CancellationToken cancellationToken)
             {
-                var category = new Category
+                var tag = new Tag
                 {
                     Name = command.Name.Trim(),
                     CreatedByUserId = createdByUserId,
                 };
-                _db.Categories.Add(category);
+                _db.Tags.Add(tag);
                 await _db.SaveChangesAsync(cancellationToken);
-                return _mapper.Map(category);
+                return _mapper.Map(tag);
             }
         }
     }
@@ -62,7 +62,7 @@ public static partial class Categories
         {
             var userId = user.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var result = await handler.HandleAsync(command, userId, ct);
-            return Results.Created($"/api/categories/{result.Id}", result);
+            return Results.Created($"/api/tags/{result.Id}", result);
         });
         return endpoints;
     }

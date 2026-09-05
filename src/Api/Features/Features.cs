@@ -3,6 +3,7 @@ using Api.Features.Accounts;
 using Api.Features.Budgets;
 using Api.Features.Categories;
 using Api.Features.Identity;
+using Api.Features.Tags;
 using Api.Features.Transactions;
 using FluentValidation;
 using SharpGrip.FluentValidation.AutoValidation.Endpoints.Extensions;
@@ -18,7 +19,8 @@ public static class Features
         .AddAccountsFeature()
         .AddCategoriesFeature()
         .AddTransactionsFeature()
-        .AddBudgetsFeature();
+        .AddBudgetsFeature()
+        .AddTagsFeature();
 
     public static IEndpointRouteBuilder MapFeatures(this IEndpointRouteBuilder endpoints)
     {
@@ -28,6 +30,7 @@ public static class Features
         group.MapCategoriesFeature();
         group.MapTransactionsFeature();
         group.MapBudgetsFeature();
+        group.MapTagsFeature();
         return endpoints;
     }
 
