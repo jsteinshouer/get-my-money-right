@@ -71,8 +71,8 @@ The visual system is recorded in [DESIGN.md](DESIGN.md) — the ruled cash book.
 
 ## Evidence on Hand
 
-- `.scratch/budgeting-app/spec.md` — the authoritative product spec: problem statement, 34 user stories, entity model, architecture and testing decisions, explicit out-of-scope list.
-- `.scratch/budgeting-app/issues/01…12-*.md` — the twelve build tickets, in phase order. Tickets 01–06 are complete.
+- `docs/specs/budgeting-app.md` — the authoritative product spec: problem statement, 34 user stories, entity model, architecture and testing decisions, explicit out-of-scope list.
+- The twelve build tickets, in phase order, are GitHub issues under the `Budgeting App v1` milestone: tickets 01–07 are complete (closed issues #13–#19, each with its completion notes and the PR or commit it landed in; source files at `docs/archive/budgeting-app-issues/`), tickets 08–12 are open (#8–#12).
 - `src/Api/Data/DemoDataSeeder.cs`, `DemoHousehold.cs` — a demo household with realistic seed data, usable for populated-state design work.
 - `AGENTS.md`, `docs/agents/` — working conventions for this repo.
 - `client/src/styles/ledger.css` — the ledger component vocabulary established with the status screen.
