@@ -1,4 +1,15 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
+
+/**
+ * The ledger row for one entry. While a correction slip is open it sits in a second <tr> that
+ * repeats the entry's description, so an unqualified row filter matches two rows.
+ */
+function entryRow(page: Page, description: string) {
+  return page
+    .getByRole('row')
+    .filter({ hasText: description })
+    .filter({ hasNot: page.getByRole('heading', { name: 'Correcting this entry' }) })
+}
 
 test('manually adding a transaction shows it in the filtered list', async ({ page }) => {
   await page.goto('/login')
@@ -90,14 +101,22 @@ test('the queue reclassifies an entry in place, and a correction slip guards the
   await expect(page.getByRole('row').filter({ hasText: description })).toBeVisible()
 
   // The queue job: two fields change in the ledger itself, with no mode to enter or leave.
-  const row = page.getByRole('row').filter({ hasText: description })
+  const row = entryRow(page, description)
   await row.getByLabel(`Category for ${description}`).selectOption({ label: toCategory })
-  await expect(row.getByLabel(`Category for ${description}`)).toHaveValue(/\d+/)
+  // Each in-place change is a round-trip that reloads the ledger, and the row says so with
+  // aria-busy. Waiting for it is what lets the next change read a fresh entry: reclassify sends
+  // the whole entry from the row it was handed, so a second change made mid-flight would post the
+  // pre-change category back over the one just set. `toHaveValue(/\d+/)` used to stand here, but
+  // the outgoing category's id is a number too, so it passed without waiting for anything.
+  await expect(row).toHaveAttribute('aria-busy', 'false')
   await row.getByLabel(`Need or Want for ${description}`).selectOption('Need')
+  await expect(row).toHaveAttribute('aria-busy', 'false')
 
   await page.reload()
   const reloaded = page.getByRole('row').filter({ hasText: description })
   await expect(reloaded.getByLabel(`Need or Want for ${description}`)).toHaveValue('Need')
+  // Both changes have to survive, not just the last one written.
+  await expect(reloaded.getByLabel(`Category for ${description}`).locator('option:checked')).toHaveText(toCategory)
 
   // A blank amount used to reach the ledger as 0.00; the slip refuses it and says why.
   await reloaded.getByRole('button', { name: 'Correct' }).click()
@@ -108,20 +127,21 @@ test('the queue reclassifies an entry in place, and a correction slip guards the
 
   await slip.getByLabel('Amount').fill('-43.75')
   await slip.getByRole('button', { name: 'Save correction' }).click()
-  await expect(page.getByRole('row').filter({ hasText: description }).getByText('-43.75')).toBeVisible()
+  await expect(slip).toHaveCount(0)
+  await expect(entryRow(page, description).getByText('-43.75')).toBeVisible()
 
   // Escape leaves a correction unmade wherever focus sits on the slip.
-  await page.getByRole('row').filter({ hasText: description }).getByRole('button', { name: 'Correct' }).click()
+  await entryRow(page, description).getByRole('button', { name: 'Correct' }).click()
   const reopened = page.getByRole('row').filter({ has: page.getByRole('heading', { name: 'Correcting this entry' }) })
   await expect(reopened).toBeVisible()
   await reopened.getByLabel('Description').press('Escape')
   await expect(page.getByRole('heading', { name: 'Correcting this entry' })).toHaveCount(0)
 
   // Deleting an entry states what it is destroying first.
-  await page.getByRole('row').filter({ hasText: description }).getByRole('button', { name: 'Delete' }).click()
+  await entryRow(page, description).getByRole('button', { name: 'Delete' }).click()
   const confirm = page.getByRole('alertdialog')
   await expect(confirm).toContainText(description)
   await expect(confirm).toContainText('-43.75')
   await confirm.getByRole('button', { name: 'Delete entry' }).click()
-  await expect(page.getByRole('row').filter({ hasText: description })).toHaveCount(0)
+  await expect(entryRow(page, description)).toHaveCount(0)
 })
