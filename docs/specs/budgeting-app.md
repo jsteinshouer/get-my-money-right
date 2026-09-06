@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Tracked in GitHub Issues under the **Budgeting App v1** milestone: tickets 01–07 are shipped (closed issues #13–#19), tickets 08–12 are open as issues #8–#12.
 
 # Personal Budgeting App
 

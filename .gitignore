@@ -29,3 +29,6 @@ client/playwright/.cache/
 # Impeccable — machine-local session state (surface briefs are committed)
 .impeccable/config.local.json
 .impeccable/questions/
+
+# Claude Code — machine-local settings (shared hook config lives in .github/hooks/)
+.claude/settings.local.json

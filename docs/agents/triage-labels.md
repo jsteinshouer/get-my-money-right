@@ -1,6 +1,6 @@
 # Triage Labels
 
-The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.
+The skills speak in terms of five canonical triage roles. This file maps those roles to the actual GitHub labels used in this repo's issue tracker (`jsteinshouer/get-my-money-right`).
 
 | Label in mattpocock/skills | Label in our tracker | Meaning                                  |
 | --------------------------- | --------------------- | ----------------------------------------- |
@@ -12,4 +12,14 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
 
-Edit the right-hand column to match whatever vocabulary you actually use.
+Exactly one of these labels should be on an issue at a time — swap rather than add:
+
+```bash
+gh issue edit <n> --remove-label needs-triage --add-label ready-for-agent
+```
+
+Alongside them, issues also carry a topic label (`enhancement`, `bug`, `documentation`, …) and the `spec` label marks an issue that tracks a whole spec rather than one ticket.
+
+There is no "done" label — done work is a **closed** issue. See `issue-tracker.md`.
+
+Edit the right-hand column to match whatever vocabulary you actually use, and mirror any change with `gh label edit`.
