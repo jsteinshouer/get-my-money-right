@@ -11,6 +11,8 @@ const MONTH_NAMES = [
 const TRANSACTION_DATE = '2026-03-10'
 
 test('the ledger spread reflects transactions in that category and month', async ({ page }) => {
+  // Walks the spread back a month at a time, several times over; the default budget is tight.
+  test.slow()
   await page.goto('/login')
   await page.getByLabel('Email').fill('user1@household.local')
   await page.getByLabel('Password').fill('ChangeMe123!')
@@ -34,13 +36,10 @@ test('the ledger spread reflects transactions in that category and month', async
   await page.getByRole('button', { name: 'Add category' }).click()
   await expect(page.getByRole('row').filter({ hasText: categoryName })).toBeVisible()
 
-  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Budgets' }).click()
-  await expect(page.getByRole('heading', { name: 'Budgets' })).toBeVisible()
-  await page.getByLabel('Month', { exact: true }).fill(MONTH)
-  const budgetForm = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Set a category budget' }) })
-  await budgetForm.getByLabel('Category').selectOption({ label: categoryName })
-  await budgetForm.getByLabel('Monthly limit').fill('200.00')
-  await page.getByRole('button', { name: 'Save budget' }).click()
+  // Through the helper, which waits for the limit to come back before moving on: this used to
+  // navigate away the moment the button was clicked, and the spread below asserts on the budget
+  // that click was still saving.
+  await setBudget(page, { month: MONTH, categoryName, amount: '200.00' })
 
   // A budget with nothing spent against it still has an entry, reading the full limit as left.
   await openSpread(page)
@@ -63,6 +62,8 @@ test('the ledger spread reflects transactions in that category and month', async
 })
 
 test('the pace column belongs to the current month only', async ({ page }) => {
+  // Walks the spread back a month at a time, several times over; the default budget is tight.
+  test.slow()
   await page.goto('/login')
   await page.getByLabel('Email').fill('user1@household.local')
   await page.getByLabel('Password').fill('ChangeMe123!')
@@ -133,9 +134,16 @@ async function openSpread(page: Page, monthLabel: string = MONTH_LABEL) {
   await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'This month' }).click()
   await expect(page.locator('.spread-month')).toBeVisible()
 
+  const shownMonth = async () => (await page.locator('.spread-month').innerText()).trim()
+
   for (let step = 0; step < 24; step++) {
-    if ((await page.locator('.spread-month').innerText()) === monthLabel.toUpperCase()) return
+    const before = await shownMonth()
+    if (before === monthLabel.toUpperCase()) return
     await page.locator('.spread-nav button').first().click()
+    // Each month loads asynchronously. Without waiting for the heading to turn, the next pass
+    // reads the outgoing month, clicks again, and pages straight past the target — and the spread
+    // only walks backwards, so an overshoot can never be recovered.
+    await expect.poll(shownMonth).not.toBe(before)
   }
   throw new Error(`Could not reach ${monthLabel} by paging the spread`)
 }

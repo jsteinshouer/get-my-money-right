@@ -30,6 +30,17 @@ async function addCategory(page: import('@playwright/test').Page, name: string) 
   await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible()
 }
 
+/**
+ * The ledger row for one entry. While a correction slip is open it sits in a second <tr> that
+ * repeats the entry's description, so an unqualified row filter matches two rows.
+ */
+function entryRow(page: import('@playwright/test').Page, description: string) {
+  return page
+    .getByRole('row')
+    .filter({ hasText: description })
+    .filter({ hasNot: page.getByRole('heading', { name: 'Correcting this entry' }) })
+}
+
 async function addTransaction(page: import('@playwright/test').Page, opts: {
   account: string
   category: string
@@ -64,7 +75,7 @@ test('a tag written onto a transaction is created in place and filters the list'
 
   // The tag does not exist yet: it is invented at the moment the transaction needs it,
   // without leaving the page for the tag manager.
-  await page.getByRole('row').filter({ hasText: taggedDescription }).getByRole('button', { name: 'Correct' }).click()
+  await entryRow(page, taggedDescription).getByRole('button', { name: 'Correct' }).click()
   const slip = page.getByRole('row').filter({ has: page.getByRole('heading', { name: 'Correcting this entry' }) })
   await expect(slip.getByLabel('Description')).toHaveValue(taggedDescription)
 
@@ -77,16 +88,20 @@ test('a tag written onto a transaction is created in place and filters the list'
   await expect(slip.getByRole('button', { name: `Remove tag ${tagName}` })).toBeVisible()
   await slip.getByRole('button', { name: 'Save correction' }).click()
 
-  const taggedRow = page.getByRole('row').filter({ hasText: taggedDescription })
-  await expect(taggedRow.getByText(tagName)).toBeVisible()
+  // Saving is several round-trips — the entry, then each tag assign/remove, then a reload of the
+  // list — and the slip stays open across all of them. Its own tag chip carries the tag name, so
+  // asserting the name alone is satisfied by the still-open slip and proves nothing about the
+  // ledger; waiting for the slip to go is what says the save actually landed.
+  await expect(slip).toHaveCount(0)
+  await expect(entryRow(page, taggedDescription).getByText(tagName)).toBeVisible()
 
   await page.getByLabel('Filter by tag').selectOption({ label: tagName })
-  await expect(page.getByRole('row').filter({ hasText: taggedDescription })).toBeVisible()
-  await expect(page.getByRole('row').filter({ hasText: untaggedDescription })).toHaveCount(0)
+  await expect(entryRow(page, taggedDescription)).toBeVisible()
+  await expect(entryRow(page, untaggedDescription)).toHaveCount(0)
 
   await page.reload()
   await page.getByLabel('Filter by tag').selectOption({ label: tagName })
-  await expect(page.getByRole('row').filter({ hasText: taggedDescription })).toBeVisible()
+  await expect(entryRow(page, taggedDescription)).toBeVisible()
 })
 
 test('a selection of transactions is tagged in one pass and reports what it changed', async ({ page }) => {

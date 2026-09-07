@@ -17,7 +17,9 @@ export default defineConfig({
       command: 'dotnet run --urls http://localhost:5059',
       cwd: '../src/Api',
       url: 'http://localhost:5059/api/identity/me',
-      reuseExistingServer: !process.env.CI,
+      // Never reused, unlike the dev server below: the API holds the database open, so a server
+      // left from an earlier run would keep serving the file the wrapper script just deleted.
+      reuseExistingServer: false,
       timeout: 120_000,
       env: {
         ASPNETCORE_ENVIRONMENT: 'Development',

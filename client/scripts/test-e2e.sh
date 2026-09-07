@@ -39,5 +39,10 @@ if has_missing_libs "$CHROMIUM_BIN"; then
   export LD_LIBRARY_PATH="$CACHE_DIR/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
 fi
 
+# The e2e database is a fixture, not a record: every spec writes accounts, categories and
+# transactions into it under unique names and never cleans up. Left to accumulate it slows the
+# ledger's reloads until assertions that race a round-trip start failing, so each run starts empty.
+rm -f "$CLIENT_DIR/../src/Api/e2e.db" "$CLIENT_DIR/../src/Api/e2e.db-shm" "$CLIENT_DIR/../src/Api/e2e.db-wal"
+
 cd "$CLIENT_DIR"
 exec npx playwright test "$@"
