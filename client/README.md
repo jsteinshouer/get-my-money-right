@@ -1,6 +1,6 @@
-# Household Budget — client
+# MoneyRight — client
 
-React + TypeScript (Vite), styled with [Pico.css](https://picocss.com/) (classless — minimal custom styling, relies on semantic HTML).
+React + TypeScript (Vite), styled with the project's own ledger design system (`src/styles/ledger.css`) — see [DESIGN.md](../DESIGN.md).
 
 ## Development
 
