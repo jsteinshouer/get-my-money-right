@@ -1,6 +1,7 @@
 using Api.Features.Accounts;
 using Api.Features.Budgets;
 using Api.Features.Categories;
+using Api.Features.Import;
 using Api.Features.Tags;
 using Api.Features.Transactions;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -20,6 +21,7 @@ public class BudgetDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Budgets.Budget> Budgets => Set<Budgets.Budget>();
     public DbSet<Tags.Tag> Tags => Set<Tags.Tag>();
     public DbSet<Tags.TransactionTag> TransactionTags => Set<Tags.TransactionTag>();
+    public DbSet<Import.CsvImportMapping> CsvImportMappings => Set<Import.CsvImportMapping>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -114,5 +116,23 @@ public class BudgetDbContext : IdentityDbContext<ApplicationUser>
             .WithMany()
             .HasForeignKey(tt => tt.TagId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // One mapping per account is the point: a bank's export format is described once and then
+        // remembered, so the unique index is the rule rather than a guard against a race.
+        builder.Entity<Import.CsvImportMapping>()
+            .HasIndex(m => m.AccountId)
+            .IsUnique();
+
+        builder.Entity<Import.CsvImportMapping>()
+            .HasOne<Accounts.Account>()
+            .WithMany()
+            .HasForeignKey(m => m.AccountId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Import.CsvImportMapping>()
+            .HasOne<ApplicationUser>()
+            .WithMany()
+            .HasForeignKey(m => m.CreatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

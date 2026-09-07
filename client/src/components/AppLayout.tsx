@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext'
 const LINKS = [
   { to: '/', label: 'This month', end: true },
   { to: '/transactions', label: 'Transactions', end: false },
+  { to: '/import', label: 'Import', end: false },
   { to: '/budgets', label: 'Budgets', end: false },
   { to: '/categories', label: 'Categories', end: false },
   { to: '/tags', label: 'Tags', end: false },

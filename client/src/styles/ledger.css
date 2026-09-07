@@ -444,3 +444,231 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
 
 .slip form { margin-top: var(--gap-5); }
 .slip button[type='submit'] { width: 100%; }
+
+/* --- import: the wizard as a ruled station band ---------------------------- */
+
+/* Three stations on one rule, closed by a double rule. Not a stepper: no circled numbers, no
+   chevrons, no percentage. The station you are at is set in ink; the one still to be built is
+   named honestly rather than hidden. */
+.stations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-5);
+  align-items: baseline;
+  padding-bottom: var(--gap-2);
+  border-bottom: 1px solid var(--rule-strong);
+  margin-bottom: 5px;
+  position: relative;
+}
+
+.stations::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.station {
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding-bottom: var(--gap-2);
+  border-bottom: 2px solid transparent;
+  margin-bottom: calc(var(--gap-2) * -1 - 1px);
+}
+
+.station[data-state='current'] {
+  color: var(--ink);
+  border-bottom-color: var(--signal);
+}
+
+.station[data-state='done'] { color: var(--ink-2); }
+
+/* The correction mark a cash book makes against a line that is settled. */
+.station[data-state='done']::before {
+  content: '\2713';
+  color: var(--signal);
+  margin-right: var(--gap-2);
+  letter-spacing: 0;
+}
+
+.station-note {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+/* The upload step: one ruled well holding the account and the file. */
+.well {
+  background: var(--paper-sunk);
+  border: 1px solid var(--rule);
+  padding: var(--gap-5);
+  margin-block: var(--gap-5);
+}
+
+.well > :last-child { margin-bottom: 0; }
+
+.well-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 18rem) minmax(0, 1fr);
+  gap: var(--gap-5);
+  align-items: start;
+}
+
+.file-chosen {
+  font-size: 0.86rem;
+  color: var(--ink-2);
+  margin-top: var(--gap-3);
+}
+
+.file-chosen strong { color: var(--ink); font-weight: 650; }
+
+/* The mapping table. The oxblood column rule is the assignment mark: a column carrying a role is
+   ruled, a column carrying none is not. Status is never a tint, a badge or a tick in a cell. */
+.mapper { width: 100%; }
+.mapper th, .mapper td { border-bottom: 1px solid var(--rule-hair); }
+
+.mapper thead th {
+  vertical-align: top;
+  padding: var(--gap-3) var(--gap-3) var(--gap-3);
+  border-bottom: 1.5px solid var(--rule-strong);
+}
+
+.mapper th[data-assigned='true'],
+.mapper td[data-assigned='true'] {
+  border-left: 2px solid var(--signal-soft);
+  border-right: 2px solid var(--signal-soft);
+}
+
+.mapper thead th[data-assigned='true'] { background: var(--paper-field); }
+
+.mapper select {
+  margin-top: 0;
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  padding-block: 0.35rem;
+}
+
+.mapper-source {
+  display: block;
+  margin-top: var(--gap-2);
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.mapper tbody td {
+  padding: var(--gap-2) var(--gap-3);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* An assigned column is the one being read, so it is the one set in full ink. */
+.mapper tbody td[data-assigned='true'] { color: var(--ink); }
+
+/* The proof: the double rule that closes a figure, then the same rows as the app would store them. */
+.reading {
+  border-top: 1px solid var(--ink);
+  border-bottom: 3px double var(--ink);
+  padding-block: var(--gap-4);
+  margin-top: -1px;
+}
+
+.reading-head {
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: var(--gap-3);
+}
+
+.reading-row {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr) 8rem;
+  gap: var(--gap-4);
+  padding-block: var(--gap-2);
+  align-items: baseline;
+}
+
+.reading-row + .reading-row { border-top: 1px solid var(--rule-hair); }
+.reading-date { color: var(--ink-2); }
+.reading-description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reading-amount { text-align: right; font-weight: 650; }
+.reading-missing { color: var(--ink-3); }
+
+.reading-row[data-error='true'] { grid-template-columns: minmax(0, 1fr); }
+.reading-error { color: var(--signal); font-size: 0.9rem; }
+
+/* A marginal note, in the margin: one left rule and nothing else. */
+.note {
+  border-left: 2px solid var(--rule-strong);
+  padding-left: var(--gap-4);
+  margin-block: var(--gap-4);
+  font-size: 0.9rem;
+  color: var(--ink-2);
+}
+
+.note strong { color: var(--ink); font-weight: 650; }
+.note[data-signal='true'] { border-left-color: var(--signal); color: var(--signal); }
+.note[data-signal='true'] strong { color: var(--signal); }
+
+.note-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-4);
+  margin-top: var(--gap-4);
+}
+
+.note-controls label { margin-bottom: 0; }
+.note-controls .checkline { align-self: end; padding-bottom: 0.55rem; }
+
+.note button.linklike {
+  font: inherit;
+  font-size: 0.9rem;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.note button.linklike:hover { color: var(--signal); background: none; }
+
+.step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-3);
+  align-items: center;
+  margin-top: var(--gap-5);
+}
+
+@media (max-width: 46rem) {
+  .well-fields { grid-template-columns: minmax(0, 1fr); }
+  .stations { gap: var(--gap-4); }
+  .reading-row { grid-template-columns: minmax(0, 1fr); gap: var(--gap-1); }
+  .reading-amount { text-align: left; }
+}
