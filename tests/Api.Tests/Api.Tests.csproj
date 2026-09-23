@@ -21,6 +21,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Realistic bank exports the import tests parse for real, rather than strings in a test file. -->
+    <None Include="Fixtures\Csv\**\*.csv" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Api\Api.csproj" />
   </ItemGroup>
 

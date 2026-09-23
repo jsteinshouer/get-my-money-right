@@ -3,6 +3,7 @@ using Api.Features.Accounts;
 using Api.Features.Budgets;
 using Api.Features.Categories;
 using Api.Features.Identity;
+using Api.Features.Import;
 using Api.Features.Tags;
 using Api.Features.Transactions;
 using FluentValidation;
@@ -20,7 +21,8 @@ public static class Features
         .AddCategoriesFeature()
         .AddTransactionsFeature()
         .AddBudgetsFeature()
-        .AddTagsFeature();
+        .AddTagsFeature()
+        .AddImportFeature();
 
     public static IEndpointRouteBuilder MapFeatures(this IEndpointRouteBuilder endpoints)
     {
@@ -31,6 +33,7 @@ public static class Features
         group.MapTransactionsFeature();
         group.MapBudgetsFeature();
         group.MapTagsFeature();
+        group.MapImportFeature();
         return endpoints;
     }
 
