@@ -197,6 +197,18 @@ public class ReadPreviewAmountTests : IClassFixture<BudgetApiFactory>
     }
 
     [Fact]
+    public async Task Read_NormalisesTheWhitespaceInsideADescription()
+    {
+        var reading = await ReadAsync("padded-description.csv", "Padded", new ReadPreview.Command(
+            ",", true, "MM/dd/yyyy", "Posted Date", "Payee", "Amount", null, null));
+
+        // The description is shown in the one spelling the app will store it in and match rules
+        // against. A rule typed from what this row shows has to catch this row.
+        Assert.Equal("KROGER #442", reading.Rows[0].Description);
+        Assert.Equal("SHELL OIL 5578", reading.Rows[1].Description);
+    }
+
+    [Fact]
     public async Task Read_WithAnUnsupportedDelimiter_IsRejectedRatherThanThrowing()
     {
         var client = await LoggedInClientAsync(_factory);

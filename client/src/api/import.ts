@@ -42,6 +42,52 @@ export interface Reading {
   rows: ReadingRow[]
 }
 
+/** How a rule's words are held up against a row's description. */
+export type IgnoreMatchType = 'Contains' | 'StartsWith' | 'Equals'
+
+export interface IgnoreRule {
+  id: number
+  /** Null for a rule that applies to every account. */
+  accountId: number | null
+  accountName: string | null
+  matchText: string
+  matchType: IgnoreMatchType
+  isActive: boolean
+}
+
+export interface IgnoreRuleInput {
+  accountId: number | null
+  matchText: string
+  matchType: IgnoreMatchType
+}
+
+/** A non-null `skippedReason` is the strike, and it silences `error`: the row is leaving anyway. */
+export interface PreviewRow {
+  date: string | null
+  description: string | null
+  amount: number | null
+  error: string | null
+  skippedReason: string | null
+}
+
+export interface FullPreview {
+  rows: PreviewRow[]
+  willImportCount: number
+  skippedCount: number
+  errorCount: number
+}
+
+/** The three kinds of match, said the way the slip reads them out: "contains AUTOPAY". */
+export const matchTypes: { value: IgnoreMatchType; label: string }[] = [
+  { value: 'Contains', label: 'contains' },
+  { value: 'StartsWith', label: 'starts with' },
+  { value: 'Equals', label: 'is' },
+]
+
+export function matchTypeLabel(value: IgnoreMatchType): string {
+  return matchTypes.find((t) => t.value === value)?.label ?? 'contains'
+}
+
 export interface MappingDraft {
   delimiter: string
   hasHeaderRow: boolean
@@ -123,6 +169,12 @@ export const importApi = {
   fetchMapping: (accountId: number) => apiClient.get<SavedMapping>(`/import/mappings/${accountId}`),
   readPreview: (token: string, draft: MappingDraft) =>
     apiClient.post<Reading>(`/import/previews/${token}/reading`, draft),
+  /** Station 3: the whole file, with the rows an active rule catches marked and counted. */
+  readAllRows: (token: string, draft: MappingDraft) =>
+    apiClient.post<FullPreview>(`/import/previews/${token}/rows`, draft),
+  fetchIgnoreRules: () => apiClient.get<IgnoreRule[]>('/import/ignore-rules'),
+  createIgnoreRule: (input: IgnoreRuleInput) => apiClient.post<IgnoreRule>('/import/ignore-rules', input),
+  deleteIgnoreRule: (id: number) => apiClient.delete<void>(`/import/ignore-rules/${id}`),
   saveMapping: (accountId: number, draft: MappingDraft) =>
     apiClient.put<SavedMapping>(`/import/mappings/${accountId}`, {
       dateColumn: draft.dateColumn,

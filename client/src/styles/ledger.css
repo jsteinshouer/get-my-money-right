@@ -620,6 +620,129 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
 .reading-row[data-error='true'] { grid-template-columns: minmax(0, 1fr); }
 .reading-error { color: var(--signal); font-size: 0.9rem; }
 
+/* --- station 3: the reading, grown to the whole file ---------------------- */
+
+/* Same block, same double rule, every row instead of five. The entry is a block rather than a
+   single grid line because a struck row carries a second line — the reason it was struck. */
+.preview-entry { padding-block: var(--gap-2); }
+.preview-entry + .preview-entry { border-top: 1px solid var(--rule-hair); }
+
+.preview-line {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr) 8rem 11rem;
+  gap: var(--gap-4);
+  align-items: baseline;
+}
+
+/* Every figure is placed explicitly so the stroke below can be placed explicitly too, over the
+   first three columns. Left to auto-placement, the stroke would claim those cells and shunt the
+   row's own figures into the next one. */
+.preview-line > .reading-date { grid-row: 1; grid-column: 1; }
+.preview-line > .reading-description { grid-row: 1; grid-column: 2; }
+.preview-line > .reading-amount { grid-row: 1; grid-column: 3; }
+.preview-line > .preview-rule-open { grid-row: 1; grid-column: 4; }
+
+/* The pen stroke a cash book makes through a line that does not count: one continuous hairline
+   across date, description and amount together. Drawn, not `line-through` — that would break into
+   three disconnected segments across the grid and read as a typographic effect rather than a mark
+   made on the page. Decorative, and the reason below says the same thing in words.
+
+   It stops at the amount rather than running the full width, so the struck row's figures stay in
+   exactly the columns their unstruck neighbours are in. */
+.preview-entry[data-skipped='true'] .preview-line::after {
+  content: '';
+  grid-row: 1;
+  grid-column: 1 / 4;
+  align-self: center;
+  height: 0;
+  border-top: 1px solid var(--signal);
+  transform-origin: left center;
+}
+
+/* The row is never tinted; only the figure steps back. */
+.preview-entry[data-skipped='true'] .reading-amount { color: var(--ink-3); }
+
+/* The single authored moment: the rule you just wrote acting on the row that provoked it. */
+@keyframes strike-through {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+.preview-entry[data-strike='draw'] .preview-line::after {
+  animation: strike-through 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.preview-skip {
+  margin-top: 0.15rem;
+  padding-left: calc(7.5rem + var(--gap-4));
+  font-size: 0.66rem;
+  font-weight: 700;
+  font-stretch: 86%;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* A row that could not be read keeps its figures and its controls — the problem is said beneath
+   it, in the same slot the strike reason uses, rather than replacing the row with a sentence. */
+.preview-problem {
+  margin-top: 0.15rem;
+  padding-left: calc(7.5rem + var(--gap-4));
+  font-size: 0.86rem;
+  color: var(--signal);
+}
+
+/* Persistent, not revealed on hover: writing a rule is the job of this screen, not a shortcut. */
+.preview-rule-open {
+  justify-self: end;
+  padding: 0;
+  font-size: 0.66rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+}
+
+.preview-rule-open:hover {
+  color: var(--signal);
+  background: none;
+  border-color: transparent;
+  border-bottom-color: var(--signal);
+}
+
+/* The slip is written under the row it corrects, as it is on Transactions — never over it. */
+.preview-slip { padding-block: var(--gap-2) var(--gap-4); }
+
+.rule-lead {
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: var(--gap-3);
+}
+
+.rule-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--gap-4);
+  align-items: start;
+}
+
+.rule-fields label { margin-bottom: 0; }
+
+.rule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+  margin-top: var(--gap-4);
+}
+
 /* A marginal note, in the margin: one left rule and nothing else. */
 .note {
   border-left: 2px solid var(--rule-strong);
@@ -671,4 +794,29 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
   .stations { gap: var(--gap-4); }
   .reading-row { grid-template-columns: minmax(0, 1fr); gap: var(--gap-1); }
   .reading-amount { text-align: left; }
+
+  /* Import is desk work, but the page still never scrolls sideways: the entry stacks, and the
+     stroke goes with it — one hairline across the whole stacked entry rather than three. */
+  .preview-line,
+  .preview-entry[data-skipped='true'] .preview-line {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--gap-1);
+  }
+
+  .preview-line > .reading-date { grid-row: 1; }
+  .preview-line > .reading-description { grid-row: 2; }
+  .preview-line > .reading-amount { grid-row: 3; }
+  .preview-line > .preview-rule-open { grid-row: 4; }
+  .preview-line > * { grid-column: 1; }
+
+  .preview-rule-open { justify-self: start; margin-top: var(--gap-2); }
+  .preview-skip, .preview-problem { padding-left: 0; }
+
+  /* Stacked, the stroke is one hairline across the whole entry rather than three. */
+  .preview-entry[data-skipped='true'] .preview-line::after {
+    grid-column: 1;
+    grid-row: 1 / span 3;
+  }
+
+  .rule-fields { grid-template-columns: minmax(0, 1fr); }
 }

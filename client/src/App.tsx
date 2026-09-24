@@ -8,6 +8,7 @@ import { AccountsPage } from './pages/AccountsPage'
 import { BudgetsPage } from './pages/BudgetsPage'
 import { CategoriesPage } from './pages/CategoriesPage'
 import { ImportPage } from './pages/ImportPage'
+import { IgnoreRulesPage } from './pages/IgnoreRulesPage'
 import { TagsPage } from './pages/TagsPage'
 import { TransactionsPage } from './pages/TransactionsPage'
 
@@ -30,6 +31,7 @@ function App() {
             <Route path="/tags" element={<TagsPage />} />
             <Route path="/transactions" element={<TransactionsPage />} />
             <Route path="/import" element={<ImportPage />} />
+            <Route path="/import/rules" element={<IgnoreRulesPage />} />
             <Route path="/budgets" element={<BudgetsPage />} />
           </Route>
         </Routes>

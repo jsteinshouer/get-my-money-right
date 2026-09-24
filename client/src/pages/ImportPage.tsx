@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { accountsApi, type Account } from '../api/accounts'
 import {
@@ -8,12 +8,15 @@ import {
   delimiters,
   importApi,
   type ColumnRole,
+  type FullPreview,
   type MappingDraft,
+  type PreviewRow,
   type Reading,
   type UploadPreview,
 } from '../api/import'
+import { IgnoreRuleForm } from '../components/IgnoreRuleForm'
 
-type Step = 'upload' | 'map'
+type Step = 'upload' | 'map' | 'preview'
 
 const ROLE_KEYS = ['dateColumn', 'descriptionColumn', 'amountColumn', 'debitColumn', 'creditColumn'] as const
 
@@ -75,6 +78,12 @@ export function ImportPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<string | null>(null)
 
+  const [rows, setRows] = useState<FullPreview | null>(null)
+  const [rowsError, setRowsError] = useState<string | null>(null)
+  /** Rows a rule has just caught, which draw their stroke rather than arriving already struck. */
+  const [justStruck, setJustStruck] = useState<ReadonlySet<number>>(new Set())
+  const [slipRow, setSlipRow] = useState<number | null>(null)
+
   useEffect(() => {
     accountsApi
       .fetchAll()
@@ -83,11 +92,13 @@ export function ImportPage() {
   }, [])
 
   const readingRequest = useRef(0)
+  /** What the file read as last time, so a row that has just been struck can draw its stroke. */
+  const lastRead = useRef<PreviewRow[] | null>(null)
 
   // The reading is re-fetched whenever the mapping changes, because the delimiter and the header
   // flag change the columns themselves — not just how they are read.
   useEffect(() => {
-    if (!preview || !draft) {
+    if (step !== 'map' || !preview || !draft) {
       return
     }
     const sequence = ++readingRequest.current
@@ -125,9 +136,42 @@ export function ImportPage() {
           )
         }
       })
-  }, [preview, draft])
+  }, [step, preview, draft])
 
   const selectedAccount = accounts?.find((a) => String(a.id) === accountId) ?? null
+
+  /**
+   * Reads the whole file again through the rules in force right now. Every arrival at station 3
+   * re-reads, so a rule written or deleted elsewhere is applied rather than remembered.
+   */
+  const readRows = useCallback(
+    async (markNewStrikes = false) => {
+      if (!preview || !draft) {
+        return
+      }
+      try {
+        const result = await importApi.readAllRows(preview.token, draft)
+        const before = lastRead.current
+        setJustStruck(markNewStrikes && before ? newlyStruck(before, result.rows) : new Set())
+        lastRead.current = result.rows
+        setRows(result)
+        setRowsError(null)
+      } catch {
+        lastRead.current = null
+        setRows(null)
+        setRowsError(
+          'The uploaded file is no longer held for this session. Choose the file again to carry on.',
+        )
+      }
+    },
+    [preview, draft],
+  )
+
+  useEffect(() => {
+    if (step === 'preview') {
+      void readRows()
+    }
+  }, [step, readRows])
 
   async function handleUpload(event: FormEvent) {
     event.preventDefault()
@@ -235,11 +279,40 @@ export function ImportPage() {
     }
   }
 
+  /** Station 2 settles the mapping; station 3 is the same reading carrying the whole file. */
+  function goToPreview() {
+    setSaveError(null)
+    if (requirement) {
+      setSaveError(requirement)
+      return
+    }
+    if (readingError) {
+      setSaveError(readingError)
+      return
+    }
+    lastRead.current = null
+    setRows(null)
+    setRowsError(null)
+    setJustStruck(new Set())
+    setSlipRow(null)
+    setStep('preview')
+  }
+
   function startOver() {
     setStep('upload')
     setFile(null)
     setSavedAt(null)
     setSaveError(null)
+    lastRead.current = null
+    setRows(null)
+    setRowsError(null)
+    setSlipRow(null)
+  }
+
+  /** No confirmation line: the row striking itself and the tally re-counting is the confirmation. */
+  async function handleRuleSaved() {
+    setSlipRow(null)
+    await readRows(true)
   }
 
   return (
@@ -253,12 +326,11 @@ export function ImportPage() {
         <li className="station" data-state={step === 'upload' ? 'current' : 'done'}>
           Upload
         </li>
-        <li className="station" data-state={step === 'map' ? 'current' : 'ahead'}>
+        <li className="station" data-state={stationState(step, 'map')}>
           Map columns
         </li>
-        <li className="station" data-state="ahead">
+        <li className="station" data-state={stationState(step, 'preview')}>
           Preview &amp; confirm
-          <span className="station-note">Not built yet</span>
         </li>
       </ol>
 
@@ -328,8 +400,14 @@ export function ImportPage() {
               {uploading ? 'Reading…' : 'Read the file'}
             </button>
           </div>
+
+          <p className="memo">
+            Rows you never want — autopay confirmations, the transfer to savings — are struck out in the
+            preview by an <Link to="/import/rules">ignore rule</Link>. You can also write one from the row
+            that provoked it, once the preview is on screen.
+          </p>
         </form>
-      ) : preview && draft ? (
+      ) : !preview || !draft ? null : step === 'map' ? (
         <form onSubmit={handleSave}>
           <FormatNote
             draft={draft}
@@ -408,25 +486,7 @@ export function ImportPage() {
             ) : (
               reading.rows.map((row, index) => (
                 <div className="reading-row" key={index} data-error={row.error ? 'true' : 'false'}>
-                  {row.error ? (
-                    <p className="reading-error">{row.error}</p>
-                  ) : (
-                    <>
-                      <span className="reading-date">
-                        {row.date ? readableDate(row.date) : <span className="reading-missing">no date</span>}
-                      </span>
-                      <span className="reading-description">
-                        {row.description ?? <span className="reading-missing">no description</span>}
-                      </span>
-                      <span className="reading-amount">
-                        {row.amount === null ? (
-                          <span className="reading-missing">no amount</span>
-                        ) : (
-                          row.amount.toFixed(2)
-                        )}
-                      </span>
-                    </>
-                  )}
+                  {row.error ? <p className="reading-error">{row.error}</p> : <ReadingLine row={row} />}
                 </div>
               ))
             )}
@@ -449,12 +509,227 @@ export function ImportPage() {
             <button type="submit" disabled={saving} aria-busy={saving || undefined}>
               {saving ? 'Saving…' : 'Save mapping'}
             </button>
+            <button type="button" className="secondary" onClick={goToPreview}>
+              Preview all rows
+            </button>
             <button type="button" className="secondary" onClick={startOver}>
               Choose another file
             </button>
           </div>
         </form>
-      ) : null}
+      ) : (
+        <PreviewStation
+          accounts={accounts}
+          accountId={preview.accountId}
+          fileName={preview.fileName}
+          rows={rows}
+          rowsError={rowsError}
+          justStruck={justStruck}
+          slipRow={slipRow}
+          onOpenSlip={setSlipRow}
+          onRuleSaved={handleRuleSaved}
+          onBack={() => setStep('map')}
+          onStartOver={startOver}
+        />
+      )}
+    </>
+  )
+}
+
+/** Which mark the station band carries: done behind you, current where you are, ahead of you. */
+function stationState(step: Step, station: Step): 'done' | 'current' | 'ahead' {
+  const order: Step[] = ['upload', 'map', 'preview']
+  const here = order.indexOf(step)
+  const there = order.indexOf(station)
+  return here === there ? 'current' : here > there ? 'done' : 'ahead'
+}
+
+/**
+ * One row as the app would store it: date, description, amount. The same three figures at both
+ * stations — the Map step's rehearsal and station 3's performance — so a row cannot read one way
+ * while it is being mapped and another way when it is being confirmed.
+ */
+function ReadingLine({ row }: { row: { date: string | null; description: string | null; amount: number | null } }) {
+  return (
+    <>
+      <span className="reading-date">
+        {row.date ? readableDate(row.date) : <span className="reading-missing">no date</span>}
+      </span>
+      <span className="reading-description">
+        {row.description ?? <span className="reading-missing">no description</span>}
+      </span>
+      <span className="reading-amount">
+        {row.amount === null ? <span className="reading-missing">no amount</span> : row.amount.toFixed(2)}
+      </span>
+    </>
+  )
+}
+
+/** Rows that were not struck the last time the file was read, and are now. */
+function newlyStruck(before: PreviewRow[], after: PreviewRow[]): ReadonlySet<number> {
+  const struck = new Set<number>()
+  after.forEach((row, index) => {
+    if (row.skippedReason !== null && before[index]?.skippedReason == null) {
+      struck.add(index)
+    }
+  })
+  return struck
+}
+
+/**
+ * Station 3: the whole file, read as the app would store it. The same block the Map step prints
+ * under its double rule, carrying every row — and, under the rule, the counts that are the point of
+ * the screen. Nothing is written to Transactions here.
+ */
+function PreviewStation({
+  accounts,
+  accountId,
+  fileName,
+  rows,
+  rowsError,
+  justStruck,
+  slipRow,
+  onOpenSlip,
+  onRuleSaved,
+  onBack,
+  onStartOver,
+}: {
+  accounts: Account[]
+  accountId: number
+  fileName: string
+  rows: FullPreview | null
+  rowsError: string | null
+  justStruck: ReadonlySet<number>
+  slipRow: number | null
+  onOpenSlip: (index: number | null) => void
+  onRuleSaved: () => void
+  onBack: () => void
+  onStartOver: () => void
+}) {
+  if (rowsError) {
+    return (
+      <>
+        <p role="alert">{rowsError}</p>
+        <div className="step-actions">
+          <button type="button" onClick={onStartOver}>
+            Choose another file
+          </button>
+        </div>
+      </>
+    )
+  }
+
+  if (rows === null) {
+    return <p aria-busy="true">Reading the whole file…</p>
+  }
+
+  const reasons = [...new Set(rows.rows.map((row) => row.skippedReason).filter((r) => r !== null))]
+
+  return (
+    <>
+      <section className="reading" aria-label="Preview">
+        <p className="reading-head">{fileName}, every row as it will be read</p>
+
+        {rows.rows.map((row, index) => (
+          <Fragment key={index}>
+            <div
+              className="preview-entry"
+              data-skipped={row.skippedReason !== null}
+              data-strike={justStruck.has(index) ? 'draw' : undefined}
+            >
+              <div className="preview-line">
+                <ReadingLine row={row} />
+                {/* Every unstruck row carries this, including one that failed to parse: its
+                    description is perfectly readable, and it is exactly the kind of row a rule
+                    gets written from. */}
+                {row.skippedReason === null && (
+                  <button
+                    type="button"
+                    className="preview-rule-open"
+                    aria-expanded={slipRow === index}
+                    onClick={() => onOpenSlip(slipRow === index ? null : index)}
+                  >
+                    Ignore rows like this
+                  </button>
+                )}
+              </div>
+
+              {/* Real text, not an ARIA label: the reason is read by everybody, and it names the
+                  rule that caught the row so an over-broad one is diagnosable at a glance. */}
+              {row.skippedReason !== null && <p className="preview-skip">Skipped · {row.skippedReason}</p>}
+              {row.error !== null && <p className="preview-problem">{row.error}</p>}
+            </div>
+
+            {slipRow === index && (
+              <div className="preview-slip">
+                <div className="correction-slip">
+                  <div className="correction-head">
+                    <h3>Ignore rows like this</h3>
+                    <p>{row.description ?? 'this row'}</p>
+                  </div>
+                  <IgnoreRuleForm
+                    accounts={accounts}
+                    // Pre-filled from the description the row is showing: matching against anything
+                    // else would strike a row for text the household never saw.
+                    initialMatchText={row.description ?? ''}
+                    initialAccountId={accountId}
+                    submitLabel="Add rule"
+                    onSaved={onRuleSaved}
+                    onCancel={() => onOpenSlip(null)}
+                  />
+                </div>
+              </div>
+            )}
+          </Fragment>
+        ))}
+      </section>
+
+      {/* Two entries, the way a ledger closes a figure. The duplicate count joins this same line
+          in the next ticket, so nothing else is allowed in beside them. */}
+      <div className="exceptions" aria-live="polite">
+        <div className="exception">
+          <span className="exception-label">Rows will import</span>
+          <span className="exception-count num">{rows.willImportCount}</span>
+        </div>
+        <div className="exception">
+          <span className="exception-label">Skipped by a rule</span>
+          <span className="exception-count num">{rows.skippedCount}</span>
+        </div>
+      </div>
+
+      {/* Unreadable rows are named in the margin rather than given a third count: they are a
+          problem to fix at the mapping, not a figure the household is being asked to trust. */}
+      {rows.errorCount > 0 && (
+        <p className="note" data-signal="true">
+          <strong>
+            {rows.errorCount} {rows.errorCount === 1 ? 'row' : 'rows'}
+          </strong>{' '}
+          could not be read and are not counted above. Go back to the mapping and check the date format and
+          the column roles.
+        </p>
+      )}
+
+      {rows.willImportCount === 0 && rows.skippedCount > 0 && (
+        <p className="note" data-signal="true" role="alert">
+          Nothing is left to import. A rule is almost certainly catching too much —{' '}
+          <strong>{reasons.join(', ')}</strong>. Loosen or delete it on the{' '}
+          <Link to="/import/rules">ignore rules</Link> page.
+        </p>
+      )}
+
+      <p className="memo">
+        Nothing is saved yet. Importing arrives with the next ticket. Rules are listed on the{' '}
+        <Link to="/import/rules">ignore rules</Link> page.
+      </p>
+
+      <div className="step-actions">
+        <button type="button" className="secondary" onClick={onBack}>
+          Back to the mapping
+        </button>
+        <button type="button" className="secondary" onClick={onStartOver}>
+          Choose another file
+        </button>
+      </div>
     </>
   )
 }

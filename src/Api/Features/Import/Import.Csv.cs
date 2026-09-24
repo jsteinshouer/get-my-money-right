@@ -367,6 +367,23 @@ public static partial class Import
             && parts[0].Length is >= 1 and <= 3
             && parts.Skip(1).All(part => part.Length == 3);
 
+        /// <summary>
+        /// One canonical spelling of a description: trimmed, and every run of whitespace collapsed to
+        /// a single space. Exports pad and double-space the same payee inconsistently between months,
+        /// and everything downstream compares descriptions as text — an ignore rule matching one, and
+        /// the duplicate check that follows it. A rule the household typed from a row it could see
+        /// must match that row, so the app stores and shows the same spelling it matches against.
+        /// </summary>
+        public static string? NormaliseDescription(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return null;
+            }
+
+            return string.Join(' ', raw.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        }
+
         /// <summary>Column names when the file has no header row of its own.</summary>
         public static List<string> PositionalColumnNames(int count) =>
             Enumerable.Range(1, count).Select(i => $"Column {i}").ToList();
