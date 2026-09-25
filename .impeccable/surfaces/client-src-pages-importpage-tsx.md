@@ -109,6 +109,10 @@ existing API contract. **Nothing is inserted into `Transactions` by this ticket.
 **Deferred by design, and the frame must not need changing to add them:** ignore-rule strike-through in
 the preview (#9); dedupe, sign-normalized bulk insert, and the three result counts (#10).
 
+> Ticket #9 fills station 3. Its brief is
+> [client-src-pages-ignorerulespage-tsx.md](client-src-pages-ignorerulespage-tsx.md) — read it before
+> touching the preview station or the reading block.
+
 **Anti-goals:** pill or circle steppers, progress bars, two-list drag-to-connect mapping, modal dialogs,
 toasts, tinted valid/invalid cells, green checkmarks, "Success!" copy, and any encouragement. Voice stays
 plain: controls name their action, errors name the problem and the recovery.

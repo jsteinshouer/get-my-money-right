@@ -22,6 +22,7 @@ public class BudgetDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Tags.Tag> Tags => Set<Tags.Tag>();
     public DbSet<Tags.TransactionTag> TransactionTags => Set<Tags.TransactionTag>();
     public DbSet<Import.CsvImportMapping> CsvImportMappings => Set<Import.CsvImportMapping>();
+    public DbSet<Import.ImportIgnoreRule> ImportIgnoreRules => Set<Import.ImportIgnoreRule>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -133,6 +134,37 @@ public class BudgetDbContext : IdentityDbContext<ApplicationUser>
             .HasOne<ApplicationUser>()
             .WithMany()
             .HasForeignKey(m => m.CreatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Matching is case-insensitive, so the index that refuses a duplicate rule has to be too —
+        // otherwise "contains AUTOPAY" and "contains autopay" are two rules that strike the same
+        // rows and each claim credit for it.
+        builder.Entity<Import.ImportIgnoreRule>()
+            .Property(r => r.MatchText)
+            .UseCollation("NOCASE");
+
+        // Same words, same kind of match, same scope is the same rule. SQLite treats NULLs as
+        // distinct in a unique index, so two global rules with the same text would slip past this;
+        // the filtered pair below closes that.
+        builder.Entity<Import.ImportIgnoreRule>()
+            .HasIndex(r => new { r.AccountId, r.MatchText, r.MatchType })
+            .IsUnique();
+
+        builder.Entity<Import.ImportIgnoreRule>()
+            .HasIndex(r => new { r.MatchText, r.MatchType })
+            .IsUnique()
+            .HasFilter("\"AccountId\" IS NULL");
+
+        builder.Entity<Import.ImportIgnoreRule>()
+            .HasOne<Accounts.Account>()
+            .WithMany()
+            .HasForeignKey(r => r.AccountId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Import.ImportIgnoreRule>()
+            .HasOne<ApplicationUser>()
+            .WithMany()
+            .HasForeignKey(r => r.CreatedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -43,6 +43,21 @@ public static class ImportTestHelpers
         return (await response.Content.ReadFromJsonAsync<UploadPreview.Response>(TestClientExtensions.JsonOptions))!;
     }
 
+    public static Task<HttpResponseMessage> PostIgnoreRuleAsync(
+        HttpClient client, int? accountId, string matchText, IgnoreMatchType matchType) =>
+        client.PostAsJsonAsync(
+            "/api/import/ignore-rules",
+            new CreateIgnoreRule.Command(accountId, matchText, matchType),
+            TestClientExtensions.JsonOptions);
+
+    public static async Task<CreateIgnoreRule.Response> CreateIgnoreRuleAsync(
+        HttpClient client, int? accountId, string matchText, IgnoreMatchType matchType)
+    {
+        var response = await PostIgnoreRuleAsync(client, accountId, matchText, matchType);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<CreateIgnoreRule.Response>(TestClientExtensions.JsonOptions))!;
+    }
+
     public static async Task<HttpClient> LoggedInClientAsync(BudgetApiFactory factory)
     {
         var client = factory.CreateClient();
