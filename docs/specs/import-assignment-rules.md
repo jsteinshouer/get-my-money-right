@@ -1,6 +1,6 @@
 # Import Assignment Rules
 
-Tracked in GitHub Issues under the **Budgeting App v1** milestone. This spec amends ticket 10 (issue #10, CSV Import Confirm & Dedupe) and adds tickets 13–15.
+Tracked in GitHub Issues under the **Budgeting App v1** milestone. This spec amends ticket 10 (issue #10, CSV Import Confirm & Dedupe) and adds tickets 13–16 (issues #26–#29).
 
 Domain vocabulary for this spec is defined in [`CONTEXT.md`](../../CONTEXT.md). The two decisions it rests on are recorded as [ADR-0001](../adr/0001-uncategorized-is-a-real-state.md) and [ADR-0002](../adr/0002-assignment-rules-apply-at-import-only.md).
 
@@ -143,8 +143,9 @@ The spec's pipeline order is amended to insert assignment rules after the duplic
 
 1. **Ticket 10 (amended, issue #10)** — confirm and dedupe, owning the schema truth: optional category, Want default on import, counts. Ships first and unblocks everything else.
 2. **Ticket 13** — the assignment rule itself: entity, validator, create/fetch/delete operations, the shared matcher, and the rules page section.
-3. **Ticket 14** — rules applied at import: resolution across the file, preview display with rule citations, per-row override, and "make a rule from this row".
-4. **Ticket 15** — transactions-page authoring plus apply-to-existing with its count.
+3. **Ticket 14** — rules applied at import: resolution across the file, preview display with rule citations, the classified / for-review counts, and confirm-time assignment.
+4. **Ticket 15** — the preview row's correction slip: per-row override carried into confirm, "make a rule from this row" with live reclassify, and the skip branch.
+5. **Ticket 16** — transactions-page authoring plus apply-to-existing with its count.
 
 Each is a vertical slice demoable on its own and sized for one session.
 
@@ -198,4 +199,4 @@ End-to-end flows to cover:
 - This spec follows a grilling session run with `/domain-modeling`, which produced the repo's first `CONTEXT.md` and the first two ADRs. The two decisions worth re-reading before implementing are ADR-0001 (uncategorized as a real state, Want as the import default) and ADR-0002 (import-time only, with one bounded retroactive apply).
 - The Want default is a deliberate inversion of the intuitive choice. Both defaults are guesses; they fail in opposite directions, and the household would rather be wrong in the direction that gets noticed.
 - The feature deliberately borrows the ignore rule's every convention it can — nullable account scope, match types, first-match-by-id, rules read back as sentences, create/fetch/delete with no edit — so that "import rule" is one idea with two kinds rather than two subsystems that happen to sit on one page.
-- Ticket 10 was written before any of this was decided and its acceptance criteria assume a category is always present. It needs amending, not just following, and it must ship before tickets 13–15.
+- Ticket 10 was written before any of this was decided and its acceptance criteria assume a category is always present. It needs amending, not just following, and it must ship before tickets 13–16.
