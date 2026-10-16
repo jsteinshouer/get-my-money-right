@@ -8,6 +8,7 @@ export function CategorySelect({
   onChange,
   includeAllOption = false,
   required = false,
+  placeholder = 'Select a category',
 }: {
   id?: string
   label?: string
@@ -16,6 +17,8 @@ export function CategorySelect({
   onChange: (value: number | '') => void
   includeAllOption?: boolean
   required?: boolean
+  /** What the empty choice reads as, when there is no "all" option to show instead. */
+  placeholder?: string
 }) {
   return (
     <select
@@ -26,7 +29,7 @@ export function CategorySelect({
       onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
     >
       <option value="" disabled={required && !includeAllOption}>
-        {includeAllOption ? 'All categories' : 'Select a category'}
+        {includeAllOption ? 'All categories' : placeholder}
       </option>
       {categories.map((category) => (
         <option key={category.id} value={category.id}>

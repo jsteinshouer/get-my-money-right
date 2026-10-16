@@ -492,6 +492,8 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
 /* The correction mark a cash book makes against a line that is settled. */
 .station[data-state='done']::before {
   content: '\2713';
+  /* The mark is drawn for the eye; the band's own words say which station is settled. */
+  content: '\2713' / '';
   color: var(--signal);
   margin-right: var(--gap-2);
   letter-spacing: 0;
@@ -597,7 +599,34 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
   text-transform: uppercase;
   color: var(--ink-3);
   margin-bottom: var(--gap-3);
+  max-width: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--gap-3);
 }
+
+/* The file's own name, as the household saved it: a name, not a label, so not set in caps. */
+.reading-file {
+  /* A flex item of the head, so it wraps to its own line as a whole name, flush left. */
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+  font-weight: 500;
+  font-stretch: 100%;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
+}
+
+/* The guess the tally is about to make, said once under it in the register of a note. */
+.close-note {
+  margin-top: var(--gap-2);
+  font-size: 0.86rem;
+  color: var(--ink-2);
+}
+
+/* An entry takes focus only when a rule written from it has just acted on it. */
+.preview-entry:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
 
 .reading-row {
   display: grid;
@@ -659,8 +688,10 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
   transform-origin: left center;
 }
 
-/* The row is never tinted; only the figure steps back. */
-.preview-entry[data-skipped='true'] .reading-amount { color: var(--ink-3); }
+/* The row is never tinted; only the figure steps back. A duplicate steps back the same way without
+   the stroke: no rule caught it, the ledger already holds it. */
+.preview-entry[data-skipped='true'] .reading-amount,
+.preview-entry[data-duplicate='true'] .reading-amount { color: var(--ink-3); }
 
 /* The single authored moment: the rule you just wrote acting on the row that provoked it. */
 @keyframes strike-through {
@@ -712,6 +743,15 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
   background: none;
   border-color: transparent;
   border-bottom-color: var(--signal);
+}
+
+/* The close after an import: the tally's frame (.exceptions), carrying one sentence of what was
+   written. As wide as the tally it replaces, so the close does not jump when the import lands. */
+.import-result {
+  max-width: none;
+  padding: var(--gap-3) var(--gap-4);
+  font-weight: 650;
+  color: var(--ink);
 }
 
 /* The slip is written under the row it corrects, as it is on Transactions — never over it. */
@@ -803,11 +843,12 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
     gap: var(--gap-1);
   }
 
-  .preview-line > .reading-date { grid-row: 1; }
-  .preview-line > .reading-description { grid-row: 2; }
-  .preview-line > .reading-amount { grid-row: 3; }
-  .preview-line > .preview-rule-open { grid-row: 4; }
-  .preview-line > * { grid-column: 1; }
+  /* Column and row together, per child: the desktop rules place each child by name, and a bare
+     `.preview-line > *` is too weak to move them back into the single column. */
+  .preview-line > .reading-date { grid-row: 1; grid-column: 1; }
+  .preview-line > .reading-description { grid-row: 2; grid-column: 1; }
+  .preview-line > .reading-amount { grid-row: 3; grid-column: 1; }
+  .preview-line > .preview-rule-open { grid-row: 4; grid-column: 1; }
 
   .preview-rule-open { justify-self: start; margin-top: var(--gap-2); }
   .preview-skip, .preview-problem { padding-left: 0; }

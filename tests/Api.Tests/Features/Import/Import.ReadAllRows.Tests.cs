@@ -166,6 +166,46 @@ public class ReadAllRowsTests : IClassFixture<BudgetApiFactory>
     }
 
     [Fact]
+    public async Task Read_AfterAnOverlappingImport_MarksAndCountsTheRowsAlreadyImported()
+    {
+        var client = await LoggedInClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Duplicates {Guid.NewGuid():N}");
+        await SaveMappingAsync(client, accountId, SignedAmountMapping());
+        var first = await UploadOkAsync(client, accountId, "signed-amount.csv");
+        (await client.PostAsync($"/api/import/previews/{first.Token}/confirm", null)).EnsureSuccessStatusCode();
+        var preview = await UploadOkAsync(client, accountId, "overlapping-export.csv");
+
+        var result = await ReadOkAsync(client, preview.Token, Mapping());
+
+        Assert.Equal(
+            ["BLUE BOTTLE COFFEE", "CITY UTILITIES"],
+            result.Rows.Where(r => r.IsDuplicate).Select(r => r.Description));
+        Assert.Equal(2, result.DuplicateCount);
+        // The count on the Import button is the count the confirm will write.
+        Assert.Equal(3, result.WillImportCount);
+        Assert.Equal(0, result.SkippedCount);
+    }
+
+    [Fact]
+    public async Task Read_ARowWithABlankDate_IsUnreadableRatherThanImportedUndated()
+    {
+        var client = await LoggedInClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Blank Date {Guid.NewGuid():N}");
+        var preview = await UploadBytesAsync(client, accountId, "blank-date.csv",
+            "Posted Date,Reference,Payee,Amount\n08/14/2026,1,KROGER #442,-84.19\n,2,PENDING HOLD,-1.00\n,,,\n"u8.ToArray());
+        preview.EnsureSuccessStatusCode();
+        var token = (await preview.Content.ReadFromJsonAsync<UploadPreview.Response>(TestClientExtensions.JsonOptions))!.Token;
+
+        var result = await ReadOkAsync(client, token, Mapping());
+
+        // The line of bare commas is not a row at all, so it is neither printed nor counted.
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal("This row has no date.", result.Rows.Single(r => r.Description == "PENDING HOLD").Error);
+        Assert.Equal(1, result.ErrorCount);
+        Assert.Equal(1, result.WillImportCount);
+    }
+
+    [Fact]
     public async Task Read_WithAnUnknownToken_ReturnsNotFound()
     {
         var client = await LoggedInClientAsync(_factory);

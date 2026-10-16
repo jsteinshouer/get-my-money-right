@@ -63,6 +63,8 @@ public static partial class Import
             return entry;
         }
 
+        public void Remove(string token) => _entries.TryRemove(token, out _);
+
         private void Prune()
         {
             var now = DateTimeOffset.UtcNow;

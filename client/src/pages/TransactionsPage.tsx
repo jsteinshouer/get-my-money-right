@@ -56,6 +56,9 @@ export function TransactionsPage() {
     return raw === 'Need' || raw === 'Want' ? raw : ''
   })
   const [filterTagId, setFilterTagId] = useState<number | ''>(() => numberParam('tagId'))
+  // The review queue is a way of filtering by category — by the absence of one — so it shares the
+  // category filter rather than earning a control of its own.
+  const [filterUncategorized, setFilterUncategorized] = useState(() => searchParams.get('uncategorized') === 'true')
 
   const [form, setForm] = useState(emptyForm)
   const [adding, setAdding] = useState(false)
@@ -87,12 +90,13 @@ export function TransactionsPage() {
           dateTo: filterDateTo || undefined,
           needWant: filterNeedWant || undefined,
           tagId: filterTagId || undefined,
+          uncategorized: filterUncategorized || undefined,
         }),
       )
     } catch {
       setError('Failed to load transactions.')
     }
-  }, [filterAccountId, filterCategoryId, filterDateFrom, filterDateTo, filterNeedWant, filterTagId])
+  }, [filterAccountId, filterCategoryId, filterDateFrom, filterDateTo, filterNeedWant, filterTagId, filterUncategorized])
 
   useEffect(() => {
     void load()
@@ -101,7 +105,7 @@ export function TransactionsPage() {
   // A selection only means anything against the list it was made on, so changing the filters drops it.
   useEffect(() => {
     setSelectedIds([])
-  }, [filterAccountId, filterCategoryId, filterDateFrom, filterDateTo, filterNeedWant, filterTagId])
+  }, [filterAccountId, filterCategoryId, filterDateFrom, filterDateTo, filterNeedWant, filterTagId, filterUncategorized])
 
   async function createTag(name: string): Promise<Tag | null> {
     setError(null)
@@ -122,16 +126,23 @@ export function TransactionsPage() {
   /** The queue job: reclassify one field on an entry without entering a mode. */
   async function reclassify(transaction: Transaction, change: Partial<TransactionInput>) {
     setError(null)
+    const categoryId = change.categoryId ?? transaction.categoryId
+    if (categoryId === null) {
+      // Filing it is the review: a Need/Want set on a row nobody has categorized would leave it in
+      // the queue looking judged.
+      setError(`Give “${transaction.description}” a category first. That is what takes it out of the review queue.`)
+      return
+    }
     setBusyRowId(transaction.id)
     try {
       await transactionsApi.update(transaction.id, {
         accountId: transaction.accountId,
-        categoryId: transaction.categoryId,
         date: transaction.date,
         amount: transaction.amount,
         description: transaction.description,
         needWant: transaction.needWant,
         ...change,
+        categoryId,
       })
       await load()
     } catch {
@@ -331,13 +342,23 @@ export function TransactionsPage() {
           </label>
           <label htmlFor="filter-category">
             Filter by category
-            <CategorySelect
+            <select
               id="filter-category"
-              categories={categories}
-              value={filterCategoryId}
-              onChange={setFilterCategoryId}
-              includeAllOption
-            />
+              value={filterUncategorized ? 'none' : filterCategoryId}
+              onChange={(e) => {
+                const value = e.target.value
+                setFilterUncategorized(value === 'none')
+                setFilterCategoryId(value === '' || value === 'none' ? '' : Number(value))
+              }}
+            >
+              <option value="">All categories</option>
+              <option value="none">No category — the review queue</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
           </label>
           <label htmlFor="filter-need-want">
             Filter by Need/Want
@@ -385,7 +406,11 @@ export function TransactionsPage() {
       {transactions === null ? (
         <p aria-busy="true">Loading…</p>
       ) : transactions.length === 0 ? (
-        <p>No transactions match the current filters.</p>
+        <p>
+          {filterUncategorized
+            ? 'Nothing is waiting for a category.'
+            : 'No transactions match the current filters.'}
+        </p>
       ) : (
         <div className="table-scroll">
           <table>
@@ -594,8 +619,9 @@ function Entry({
           <CategorySelect
             label={`Category for ${transaction.description}`}
             categories={categories}
-            value={transaction.categoryId}
+            value={transaction.categoryId ?? ''}
             onChange={(categoryId) => categoryId !== '' && onReclassify(transaction, { categoryId })}
+            placeholder="No category"
             required
           />
         </td>

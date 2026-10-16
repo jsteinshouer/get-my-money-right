@@ -68,6 +68,27 @@ public class CreateTests : IClassFixture<BudgetApiFactory>
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("null")]
+    [InlineData("0")]
+    public async Task Create_WithoutCategory_ReturnsBadRequest(string categoryId)
+    {
+        // Uncategorized is a state an import puts a row in, never one a person chooses by leaving
+        // the field blank: a hand-entered transaction always names its category.
+        var client = _factory.CreateClient();
+        await client.LoginAsync(BudgetApiFactory.SeededUser1Email, BudgetApiFactory.SeededUser1Password);
+        var accountId = await TransactionsTestHelpers.CreateAccountAsync(client, "Missing Category Account");
+
+        var response = await client.PostAsync("/api/transactions", JsonBody($$"""
+            {"accountId":{{accountId}},"categoryId":{{categoryId}},"date":"2026-01-15","amount":-10,"description":"No category","needWant":"Want"}
+            """));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var list = await client.GetFromJsonAsync<List<FetchAll.Response>>(
+            $"/api/transactions?accountId={accountId}", TestClientExtensions.JsonOptions);
+        Assert.Empty(list!);
+    }
+
     [Fact]
     public async Task Create_WithUnknownAccount_ReturnsConflict()
     {
@@ -82,4 +103,7 @@ public class CreateTests : IClassFixture<BudgetApiFactory>
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
+
+    private static StringContent JsonBody(string json) =>
+        new(json, System.Text.Encoding.UTF8, "application/json");
 }

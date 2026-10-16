@@ -61,20 +61,33 @@ export interface IgnoreRuleInput {
   matchType: IgnoreMatchType
 }
 
-/** A non-null `skippedReason` is the strike, and it silences `error`: the row is leaving anyway. */
+/**
+ * A row carries at most one reason for leaving. A non-null `skippedReason` is the strike, and it
+ * silences `error`: the row is leaving anyway. `isDuplicate` is only ever set on a readable,
+ * unstruck row — one the ledger already holds.
+ */
 export interface PreviewRow {
   date: string | null
   description: string | null
   amount: number | null
   error: string | null
   skippedReason: string | null
+  isDuplicate: boolean
 }
 
 export interface FullPreview {
   rows: PreviewRow[]
   willImportCount: number
   skippedCount: number
+  duplicateCount: number
   errorCount: number
+}
+
+/** What a confirmed import wrote, and what it left out and why. */
+export interface ImportResult {
+  imported: number
+  skippedIgnored: number
+  skippedDuplicate: number
 }
 
 /** The three kinds of match, said the way the slip reads them out: "contains AUTOPAY". */
@@ -164,6 +177,26 @@ async function problemDetail(response: Response): Promise<string> {
     : 'That file could not be read as a CSV.'
 }
 
+/**
+ * Writes the held file as transactions, through the account's saved mapping. Like the upload, a
+ * refusal carries the server's own sentence — "2 rows could not be read…" — so it bypasses
+ * apiClient to keep it.
+ */
+async function confirm(token: string): Promise<ImportResult> {
+  const response = await fetch(`/api/import/previews/${token}/confirm`, { method: 'POST', credentials: 'include' })
+
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      response.status === 404
+        ? 'The uploaded file is no longer held for this session. Choose the file again to carry on.'
+        : await problemDetail(response),
+    )
+  }
+
+  return (await response.json()) as ImportResult
+}
+
 export const importApi = {
   uploadPreview,
   fetchMapping: (accountId: number) => apiClient.get<SavedMapping>(`/import/mappings/${accountId}`),
@@ -172,6 +205,7 @@ export const importApi = {
   /** Station 3: the whole file, with the rows an active rule catches marked and counted. */
   readAllRows: (token: string, draft: MappingDraft) =>
     apiClient.post<FullPreview>(`/import/previews/${token}/rows`, draft),
+  confirm,
   fetchIgnoreRules: () => apiClient.get<IgnoreRule[]>('/import/ignore-rules'),
   createIgnoreRule: (input: IgnoreRuleInput) => apiClient.post<IgnoreRule>('/import/ignore-rules', input),
   deleteIgnoreRule: (id: number) => apiClient.delete<void>(`/import/ignore-rules/${id}`),

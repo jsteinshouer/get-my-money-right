@@ -1,6 +1,17 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+  type Ref,
+} from 'react'
 import { Link } from 'react-router-dom'
 import { accountsApi, type Account } from '../api/accounts'
+import { ApiError } from '../api/client'
 import {
   dateFormatLabel,
   dateFormats,
@@ -9,11 +20,13 @@ import {
   importApi,
   type ColumnRole,
   type FullPreview,
+  type ImportResult,
   type MappingDraft,
   type PreviewRow,
   type Reading,
   type UploadPreview,
 } from '../api/import'
+import { transactionsApi } from '../api/transactions'
 import { IgnoreRuleForm } from '../components/IgnoreRuleForm'
 
 type Step = 'upload' | 'map' | 'preview'
@@ -84,12 +97,35 @@ export function ImportPage() {
   const [justStruck, setJustStruck] = useState<ReadonlySet<number>>(new Set())
   const [slipRow, setSlipRow] = useState<number | null>(null)
 
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [result, setResult] = useState<ImportResult | null>(null)
+  /** The account's review queue after the import: the count the memo's link actually opens. */
+  const [waiting, setWaiting] = useState(0)
+
   useEffect(() => {
     accountsApi
       .fetchAll()
       .then(setAccounts)
       .catch(() => setLoadError('Failed to load accounts.'))
   }, [])
+
+  /**
+   * Each step opens on its own heading. Without this, every station change drops keyboard and
+   * screen-reader focus back to the top of the document, and the next thing read is the masthead.
+   */
+  const stepHeading = useRef<HTMLHeadingElement>(null)
+  const firstStep = useRef(true)
+  useEffect(() => {
+    if (firstStep.current) {
+      firstStep.current = false
+      return
+    }
+    stepHeading.current?.focus()
+  }, [step])
+
+  /** The row a rule was just written from: focus returns there once the file re-reads. */
+  const [focusRow, setFocusRow] = useState<number | null>(null)
 
   const readingRequest = useRef(0)
   /** What the file read as last time, so a row that has just been struck can draw its stroke. */
@@ -195,6 +231,8 @@ export function ImportPage() {
       setSavedAt(null)
       setSaveError(null)
       setShowFormat(false)
+      setResult(null)
+      setImportError(null)
       setStep('map')
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : 'That file could not be read as a CSV.')
@@ -253,6 +291,15 @@ export function ImportPage() {
 
   const requirement = draft ? unmetRequirement(draft) : null
 
+  // The fifth import from the same bank: the mapping on screen is the one already saved, so the
+  // next step is to read the file, not to save what is saved. Import saves it again anyway.
+  const remembered =
+    preview !== null &&
+    draft !== null &&
+    preview.saved !== null &&
+    preview.missingColumns.length === 0 &&
+    sameMapping(draft, draftFrom(preview))
+
   async function handleSave(event: FormEvent) {
     event.preventDefault()
     setSaveError(null)
@@ -295,6 +342,7 @@ export function ImportPage() {
     setRowsError(null)
     setJustStruck(new Set())
     setSlipRow(null)
+    setImportError(null)
     setStep('preview')
   }
 
@@ -307,10 +355,52 @@ export function ImportPage() {
     setRows(null)
     setRowsError(null)
     setSlipRow(null)
+    setResult(null)
+    setImportError(null)
+  }
+
+  /**
+   * The import reads the file through the account's saved mapping, so the mapping on screen is
+   * saved first: what the household previewed is exactly what is written, and the next export from
+   * this bank arrives already mapped. No confirmation dialog — the button names what it will do.
+   */
+  async function handleImport() {
+    if (!preview || !draft) {
+      return
+    }
+    setImportError(null)
+    setImporting(true)
+    try {
+      try {
+        await importApi.saveMapping(preview.accountId, draft)
+      } catch {
+        setImportError('The mapping could not be saved, so nothing was imported. Try again.')
+        return
+      }
+      const outcome = await importApi.confirm(preview.token)
+      // Counted after the import rather than taken from it, so rows left unfiled by an earlier
+      // import of this account are in the figure too — they are in the list the memo opens.
+      const queue = await transactionsApi
+        .fetchAll({ accountId: preview.accountId, uncategorized: true })
+        .catch(() => null)
+      setWaiting(queue?.length ?? outcome.imported)
+      setResult(outcome)
+      setSlipRow(null)
+    } catch (error) {
+      // The server's own sentence when it refused; a plain one when it could not be reached at all.
+      setImportError(
+        error instanceof ApiError
+          ? error.message
+          : 'The import could not reach the server, so nothing was written. Try again.',
+      )
+    } finally {
+      setImporting(false)
+    }
   }
 
   /** No confirmation line: the row striking itself and the tally re-counting is the confirmation. */
   async function handleRuleSaved() {
+    setFocusRow(slipRow)
     setSlipRow(null)
     await readRows(true)
   }
@@ -323,15 +413,10 @@ export function ImportPage() {
       </hgroup>
 
       <ol className="stations" aria-label="Import steps">
-        <li className="station" data-state={step === 'upload' ? 'current' : 'done'}>
-          Upload
-        </li>
-        <li className="station" data-state={stationState(step, 'map')}>
-          Map columns
-        </li>
-        <li className="station" data-state={stationState(step, 'preview')}>
-          Preview &amp; confirm
-        </li>
+        <Station state={step === 'upload' ? 'current' : 'done'}>Upload</Station>
+        <Station state={stationState(step, 'map')}>Map columns</Station>
+        {/* Once the file is written there is no station left to be at: all three are settled. */}
+        <Station state={result !== null ? 'done' : stationState(step, 'preview')}>Preview &amp; confirm</Station>
       </ol>
 
       {loadError && <p role="alert">{loadError}</p>}
@@ -348,6 +433,7 @@ export function ImportPage() {
         </div>
       ) : step === 'upload' ? (
         <form onSubmit={handleUpload}>
+          <StepHeading ref={stepHeading}>Upload</StepHeading>
           <div className="well">
             <div className="well-fields">
               <label htmlFor="import-account">
@@ -409,6 +495,7 @@ export function ImportPage() {
         </form>
       ) : !preview || !draft ? null : step === 'map' ? (
         <form onSubmit={handleSave}>
+          <StepHeading ref={stepHeading}>Map columns</StepHeading>
           <FormatNote
             draft={draft}
             fileName={preview.fileName}
@@ -420,7 +507,7 @@ export function ImportPage() {
           {preview.saved && preview.missingColumns.length === 0 && (
             <p className="note">
               Remembered from the last import for <strong>{selectedAccount?.name ?? 'this account'}</strong>,{' '}
-              {readableTimestamp(preview.saved.updatedAt)}. Check it still reads correctly, then save.
+              {readableTimestamp(preview.saved.updatedAt)}. Check it still reads correctly, then preview every row.
             </p>
           )}
 
@@ -495,7 +582,7 @@ export function ImportPage() {
           {savedAt && (
             <p className="note" role="status">
               Mapping saved for <strong>{selectedAccount?.name ?? 'this account'}</strong>. The next export from
-              this account arrives already mapped. Importing the rows themselves is not built yet.
+              this account arrives already mapped.
             </p>
           )}
 
@@ -506,18 +593,32 @@ export function ImportPage() {
           )}
 
           <div className="step-actions">
-            <button type="submit" disabled={saving} aria-busy={saving || undefined}>
+            {remembered && (
+              <button type="button" onClick={goToPreview}>
+                Preview all rows
+              </button>
+            )}
+            <button
+              type="submit"
+              className={remembered ? 'secondary' : undefined}
+              disabled={saving}
+              aria-busy={saving || undefined}
+            >
               {saving ? 'Saving…' : 'Save mapping'}
             </button>
-            <button type="button" className="secondary" onClick={goToPreview}>
-              Preview all rows
-            </button>
+            {!remembered && (
+              <button type="button" className="secondary" onClick={goToPreview}>
+                Preview all rows
+              </button>
+            )}
             <button type="button" className="secondary" onClick={startOver}>
               Choose another file
             </button>
           </div>
         </form>
       ) : (
+        <>
+        <StepHeading ref={stepHeading}>Preview &amp; confirm</StepHeading>
         <PreviewStation
           accounts={accounts}
           accountId={preview.accountId}
@@ -526,13 +627,42 @@ export function ImportPage() {
           rowsError={rowsError}
           justStruck={justStruck}
           slipRow={slipRow}
+          importing={importing}
+          importError={importError}
+          result={result}
+          waiting={waiting}
           onOpenSlip={setSlipRow}
           onRuleSaved={handleRuleSaved}
+          onImport={handleImport}
+          focusRow={focusRow}
+          onFocused={() => setFocusRow(null)}
           onBack={() => setStep('map')}
           onStartOver={startOver}
         />
+        </>
       )}
     </>
+  )
+}
+
+/** A station on the band. The current one says so to assistive technology, not only in ink. */
+function Station({ state, children }: { state: 'done' | 'current' | 'ahead'; children: ReactNode }) {
+  return (
+    <li className="station" data-state={state} aria-current={state === 'current' ? 'step' : undefined}>
+      {children}
+    </li>
+  )
+}
+
+/**
+ * The step's name as a heading, for the document outline and as the place focus lands. Hidden
+ * because the station band already says it in ink, one rule above.
+ */
+function StepHeading({ ref, children }: { ref: Ref<HTMLHeadingElement>; children: ReactNode }) {
+  return (
+    <h2 className="visually-hidden" tabIndex={-1} ref={ref}>
+      {children}
+    </h2>
   )
 }
 
@@ -579,7 +709,8 @@ function newlyStruck(before: PreviewRow[], after: PreviewRow[]): ReadonlySet<num
 /**
  * Station 3: the whole file, read as the app would store it. The same block the Map step prints
  * under its double rule, carrying every row — and, under the rule, the counts that are the point of
- * the screen. Nothing is written to Transactions here.
+ * the screen, closed by the one action that writes them. After the import the same close prints
+ * what was written.
  */
 function PreviewStation({
   accounts,
@@ -589,8 +720,15 @@ function PreviewStation({
   rowsError,
   justStruck,
   slipRow,
+  importing,
+  importError,
+  result,
+  waiting,
+  focusRow,
+  onFocused,
   onOpenSlip,
   onRuleSaved,
+  onImport,
   onBack,
   onStartOver,
 }: {
@@ -601,11 +739,30 @@ function PreviewStation({
   rowsError: string | null
   justStruck: ReadonlySet<number>
   slipRow: number | null
+  importing: boolean
+  importError: string | null
+  result: ImportResult | null
+  waiting: number
+  focusRow: number | null
+  onFocused: () => void
   onOpenSlip: (index: number | null) => void
   onRuleSaved: () => void
+  onImport: () => void
   onBack: () => void
   onStartOver: () => void
 }) {
+  const readingRef = useRef<HTMLElement>(null)
+
+  // After a rule is written the slip closes under the cursor; focus goes back to the row it was
+  // written from, which now carries its strike and the rule's name.
+  useEffect(() => {
+    if (focusRow === null || rows === null) {
+      return
+    }
+    readingRef.current?.querySelector<HTMLElement>(`[data-entry="${focusRow}"]`)?.focus()
+    onFocused()
+  }, [focusRow, rows, onFocused])
+
   if (rowsError) {
     return (
       <>
@@ -624,29 +781,39 @@ function PreviewStation({
   }
 
   const reasons = [...new Set(rows.rows.map((row) => row.skippedReason).filter((r) => r !== null))]
+  // Once the file is written it is no longer held, so there is nothing left to write a rule against.
+  const imported = result !== null
 
   return (
     <>
-      <section className="reading" aria-label="Preview">
-        <p className="reading-head">{fileName}, every row as it will be read</p>
+      <section className="reading" aria-label="Preview" ref={readingRef}>
+        <p className="reading-head">
+          {imported ? 'Every row, as it was read' : 'Every row, as it will be read'}
+          <span className="reading-file">{fileName}</span>
+        </p>
 
         {rows.rows.map((row, index) => (
           <Fragment key={index}>
             <div
               className="preview-entry"
+              data-entry={index}
+              tabIndex={-1}
               data-skipped={row.skippedReason !== null}
+              data-duplicate={row.isDuplicate}
               data-strike={justStruck.has(index) ? 'draw' : undefined}
             >
               <div className="preview-line">
                 <ReadingLine row={row} />
-                {/* Every unstruck row carries this, including one that failed to parse: its
+                {/* Every row still going in carries this, including one that failed to parse: its
                     description is perfectly readable, and it is exactly the kind of row a rule
-                    gets written from. */}
-                {row.skippedReason === null && (
+                    gets written from. A duplicate is leaving already, so a rule would change nothing. */}
+                {!imported && row.skippedReason === null && !row.isDuplicate && (
                   <button
                     type="button"
                     className="preview-rule-open"
                     aria-expanded={slipRow === index}
+                    // Every row carries the same words; the row's own description tells them apart.
+                    aria-label={`Ignore rows like this: ${row.description ?? 'this row'}`}
                     onClick={() => onOpenSlip(slipRow === index ? null : index)}
                   >
                     Ignore rows like this
@@ -657,10 +824,13 @@ function PreviewStation({
               {/* Real text, not an ARIA label: the reason is read by everybody, and it names the
                   rule that caught the row so an over-broad one is diagnosable at a glance. */}
               {row.skippedReason !== null && <p className="preview-skip">Skipped · {row.skippedReason}</p>}
+              {/* Not struck: the pen stroke means a rule caught the row, and no rule did. The row is
+                  already in the ledger, and says so in the same register. */}
+              {row.isDuplicate && <p className="preview-skip">Already imported</p>}
               {row.error !== null && <p className="preview-problem">{row.error}</p>}
             </div>
 
-            {slipRow === index && (
+            {!imported && slipRow === index && (
               <div className="preview-slip">
                 <div className="correction-slip">
                   <div className="correction-head">
@@ -684,50 +854,159 @@ function PreviewStation({
         ))}
       </section>
 
-      {/* Two entries, the way a ledger closes a figure. The duplicate count joins this same line
-          in the next ticket, so nothing else is allowed in beside them. */}
-      <div className="exceptions" aria-live="polite">
-        <div className="exception">
-          <span className="exception-label">Rows will import</span>
-          <span className="exception-count num">{rows.willImportCount}</span>
-        </div>
-        <div className="exception">
-          <span className="exception-label">Skipped by a rule</span>
-          <span className="exception-count num">{rows.skippedCount}</span>
-        </div>
-      </div>
+      {result !== null ? (
+        <ImportedClose
+          result={result}
+          waiting={waiting}
+          accountId={accountId}
+          accountName={accounts.find((a) => a.id === accountId)?.name ?? 'this account'}
+          onStartOver={onStartOver}
+        />
+      ) : (
+        <>
+          {/* Entries, the way a ledger closes a figure. Every row that goes in arrives with no
+              category, so all of them are for review until assignment rules can categorize a row. */}
+          <div className="exceptions">
+            <div className="exception">
+              <span className="exception-label">For review</span>
+              <span className="exception-count num">{rows.willImportCount}</span>
+            </div>
+            <div className="exception">
+              <span className="exception-label">Skipped by a rule</span>
+              <span className="exception-count num">{rows.skippedCount}</span>
+            </div>
+            <div className="exception">
+              <span className="exception-label">Already imported</span>
+              <span className="exception-count num">{rows.duplicateCount}</span>
+            </div>
+          </div>
 
-      {/* Unreadable rows are named in the margin rather than given a third count: they are a
-          problem to fix at the mapping, not a figure the household is being asked to trust. */}
-      {rows.errorCount > 0 && (
-        <p className="note" data-signal="true">
-          <strong>
-            {rows.errorCount} {rows.errorCount === 1 ? 'row' : 'rows'}
-          </strong>{' '}
-          could not be read and are not counted above. Go back to the mapping and check the date format and
-          the column roles.
-        </p>
+          {/* The guess, made in the open: nothing has filed these rows, so they arrive with no
+              category and counted as a Want until a person says otherwise (ADR-0001). */}
+          {rows.willImportCount > 0 && (
+            <p className="close-note">
+              {rows.willImportCount === 1 ? 'It lands' : 'Each lands'} with no category, as a Want, until someone files{' '}
+              {rows.willImportCount === 1 ? 'it' : 'them'}.
+            </p>
+          )}
+
+          {/* One sentence for assistive technology, rather than three figures each announced alone
+              as a rule re-counts them. */}
+          <p className="visually-hidden" aria-live="polite">
+            {rows.willImportCount} for review, {rows.skippedCount} skipped by a rule, {rows.duplicateCount} already
+            imported.
+          </p>
+
+          {/* Unreadable rows are named in the margin rather than given a count of their own: they
+              are a problem to fix at the mapping, not a figure the household is being asked to trust. */}
+          {rows.errorCount > 0 && (
+            <p className="note" data-signal="true">
+              <strong>
+                {rows.errorCount} {rows.errorCount === 1 ? 'row' : 'rows'}
+              </strong>{' '}
+              could not be read, so nothing can be imported yet. Go back to the mapping and check the date
+              format and the column roles, or skip {rows.errorCount === 1 ? 'it' : 'them'} with a rule.
+            </p>
+          )}
+
+          {rows.willImportCount === 0 && rows.skippedCount > 0 && rows.duplicateCount === 0 && (
+            <p className="note" data-signal="true" role="alert">
+              Nothing is left to import. A rule is almost certainly catching too much —{' '}
+              <strong>{reasons.join(', ')}</strong>. Loosen or delete it on the{' '}
+              <Link to="/import/rules">ignore rules</Link> page.
+            </p>
+          )}
+
+          {rows.willImportCount === 0 && rows.duplicateCount > 0 && rows.errorCount === 0 && (
+            <p className="note">
+              Everything in this file is already in the ledger or skipped by a rule. There is nothing new
+              to import.
+            </p>
+          )}
+
+          {importError && (
+            <p className="field-error" role="alert">
+              {importError}
+            </p>
+          )}
+
+          <div className="step-actions">
+            <button
+              type="button"
+              onClick={onImport}
+              disabled={importing || rows.errorCount > 0 || rows.willImportCount === 0}
+              aria-busy={importing || undefined}
+            >
+              {importing
+                ? 'Importing…'
+                : `Import ${rows.willImportCount} ${rows.willImportCount === 1 ? 'row' : 'rows'}`}
+            </button>
+            <button type="button" className="secondary" onClick={onBack}>
+              Back to the mapping
+            </button>
+            <button type="button" className="secondary" onClick={onStartOver}>
+              Choose another file
+            </button>
+          </div>
+
+          <p className="memo">
+            Rules are listed on the <Link to="/import/rules">ignore rules</Link> page.
+          </p>
+        </>
       )}
+    </>
+  )
+}
 
-      {rows.willImportCount === 0 && rows.skippedCount > 0 && (
-        <p className="note" data-signal="true" role="alert">
-          Nothing is left to import. A rule is almost certainly catching too much —{' '}
-          <strong>{reasons.join(', ')}</strong>. Loosen or delete it on the{' '}
-          <Link to="/import/rules">ignore rules</Link> page.
-        </p>
-      )}
+/**
+ * The same close, after the import: what was written and what was left out, then the work it made.
+ * The review queue is the handoff from import to the monthly ritual, so it is the primary action
+ * here — and when nothing is waiting, it does not print at all.
+ */
+function ImportedClose({
+  result,
+  waiting,
+  accountId,
+  accountName,
+  onStartOver,
+}: {
+  result: ImportResult
+  waiting: number
+  accountId: number
+  accountName: string
+  onStartOver: () => void
+}) {
+  // The result replaces the button that was just pressed, so focus moves to what it says.
+  const resultRef = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    resultRef.current?.focus()
+  }, [])
 
-      <p className="memo">
-        Nothing is saved yet. Importing arrives with the next ticket. Rules are listed on the{' '}
-        <Link to="/import/rules">ignore rules</Link> page.
+  return (
+    <>
+      <p className="exceptions import-result" role="status" tabIndex={-1} ref={resultRef}>
+        Imported <span className="num">{result.imported}</span> · skipped{' '}
+        <span className="num">{result.skippedIgnored}</span> by a rule · skipped{' '}
+        <span className="num">{result.skippedDuplicate}</span> as duplicates
       </p>
 
+      {/* The account's whole queue, not just this file's rows: it is the list the action opens, and
+          rows an earlier import left unfiled are waiting in it too. */}
+      {waiting > 0 && (
+        <p className="memo">
+          <strong>{waiting}</strong> {waiting === 1 ? 'transaction' : 'transactions'} on {accountName}{' '}
+          {waiting === 1 ? 'is' : 'are'} waiting for a category.
+        </p>
+      )}
+
       <div className="step-actions">
-        <button type="button" className="secondary" onClick={onBack}>
-          Back to the mapping
-        </button>
-        <button type="button" className="secondary" onClick={onStartOver}>
-          Choose another file
+        {waiting > 0 && (
+          <Link className="button" to={`/transactions?uncategorized=true&accountId=${accountId}`}>
+            Review {waiting} {waiting === 1 ? 'transaction' : 'transactions'}
+          </Link>
+        )}
+        <button type="button" className={waiting > 0 ? 'secondary' : undefined} onClick={onStartOver}>
+          Import another file
         </button>
       </div>
     </>
@@ -763,6 +1042,15 @@ function draftFrom(preview: UploadPreview): MappingDraft {
     debitColumn: present(saved.debitColumn),
     creditColumn: present(saved.creditColumn),
   }
+}
+
+function sameMapping(a: MappingDraft, b: MappingDraft): boolean {
+  return (
+    a.delimiter === b.delimiter &&
+    a.hasHeaderRow === b.hasHeaderRow &&
+    a.dateFormat === b.dateFormat &&
+    ROLE_KEYS.every((key) => a[key] === b[key])
+  )
 }
 
 /** The first thing still missing before the mapping can be saved, named as an instruction. */

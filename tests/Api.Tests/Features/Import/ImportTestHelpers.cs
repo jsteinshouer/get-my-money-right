@@ -58,6 +58,17 @@ public static class ImportTestHelpers
         return (await response.Content.ReadFromJsonAsync<CreateIgnoreRule.Response>(TestClientExtensions.JsonOptions))!;
     }
 
+    /// <summary>How signed-amount.csv and its siblings name their columns.</summary>
+    public static SaveMapping.Command SignedAmountMapping() =>
+        new("Posted Date", "Payee", "Amount", null, null, "MM/dd/yyyy", ",", true);
+
+    public static async Task SaveMappingAsync(HttpClient client, int accountId, SaveMapping.Command command)
+    {
+        var response = await client.PutAsJsonAsync(
+            $"/api/import/mappings/{accountId}", command, TestClientExtensions.JsonOptions);
+        response.EnsureSuccessStatusCode();
+    }
+
     public static async Task<HttpClient> LoggedInClientAsync(BudgetApiFactory factory)
     {
         var client = factory.CreateClient();

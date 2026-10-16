@@ -42,7 +42,7 @@ export function CorrectionSlip({
   onSave: (correction: Correction) => void
 }) {
   const [accountId, setAccountId] = useState<number | ''>(transaction.accountId)
-  const [categoryId, setCategoryId] = useState<number | ''>(transaction.categoryId)
+  const [categoryId, setCategoryId] = useState<number | ''>(transaction.categoryId ?? '')
   const [date, setDate] = useState(transaction.date)
   const [amount, setAmount] = useState(String(transaction.amount))
   const [description, setDescription] = useState(transaction.description)
@@ -55,7 +55,7 @@ export function CorrectionSlip({
 
   const dirty =
     accountId !== transaction.accountId ||
-    categoryId !== transaction.categoryId ||
+    categoryId !== (transaction.categoryId ?? '') ||
     date !== transaction.date ||
     Number(amount) !== transaction.amount ||
     description !== transaction.description ||

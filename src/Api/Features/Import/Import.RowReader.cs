@@ -40,8 +40,11 @@ public static partial class Import
             var columns = mapping.HasHeaderRow
                 ? Csv.ColumnNames(records[0])
                 : Csv.PositionalColumnNames(records[0].Count);
+            // A line of bare separators is what some exports pad the end of a file with. It is not a
+            // row, and as one it could never be read or written a rule for.
             var dataRecords = (mapping.HasHeaderRow ? records.Skip(1) : records)
                 .Select(r => r.Select(c => c.Trim()).ToList())
+                .Where(r => r.Any(c => c.Length > 0))
                 .ToList();
 
             return (columns, dataRecords);
@@ -53,7 +56,15 @@ public static partial class Import
 
             DateOnly? date = null;
             var rawDate = Cell(record, columns, mapping.DateColumn);
-            if (rawDate is not null)
+            if (rawDate is null)
+            {
+                // Only once the role is given: an unassigned role is still being mapped, not missing.
+                if (!string.IsNullOrEmpty(mapping.DateColumn))
+                {
+                    problems.Add("This row has no date.");
+                }
+            }
+            else
             {
                 if (Csv.TryParseDate(rawDate, mapping.DateFormat, out var parsed))
                 {
@@ -66,6 +77,10 @@ public static partial class Import
             }
 
             var description = Csv.NormaliseDescription(Cell(record, columns, mapping.DescriptionColumn));
+            if (description is null && !string.IsNullOrEmpty(mapping.DescriptionColumn))
+            {
+                problems.Add("This row has no description.");
+            }
 
             decimal? amount = null;
             if (!string.IsNullOrEmpty(mapping.AmountColumn))

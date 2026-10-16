@@ -32,4 +32,14 @@ internal static class TransactionsTestHelpers
         var body = (await response.Content.ReadFromJsonAsync<TagsFeature.Create.Response>())!;
         return body.Id;
     }
+
+    /// <summary>
+    /// Six uncategorized Wants on the account, by the only route that makes them: an import.
+    /// </summary>
+    public static async Task ImportSignedAmountFixtureAsync(HttpClient client, int accountId)
+    {
+        await Import.ImportTestHelpers.SaveMappingAsync(client, accountId, Import.ImportTestHelpers.SignedAmountMapping());
+        var preview = await Import.ImportTestHelpers.UploadOkAsync(client, accountId, "signed-amount.csv");
+        (await client.PostAsync($"/api/import/previews/{preview.Token}/confirm", null)).EnsureSuccessStatusCode();
+    }
 }

@@ -43,6 +43,12 @@ function transactionsHref(year: number, month: number, categoryId?: number): str
   return `/transactions?${params.toString()}`
 }
 
+/** The month's review queue: the transactions page filtered to the ones with no category. */
+function reviewQueueHref(year: number, month: number): string {
+  const { dateFrom, dateTo } = monthBounds(year, month)
+  return `/transactions?${new URLSearchParams({ dateFrom, dateTo, uncategorized: 'true' }).toString()}`
+}
+
 export function StatusPage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
@@ -159,7 +165,7 @@ function MonthSpread({ summary, onRetry }: { summary: MonthSummary; onRetry: () 
         <div className="exceptions">
           <Link
             className="exception"
-            to={transactionsHref(year, month)}
+            to={reviewQueueHref(year, month)}
             data-flagged={uncategorizedCount > 0}
           >
             <span>
@@ -304,7 +310,7 @@ function MonthSpread({ summary, onRetry }: { summary: MonthSummary; onRetry: () 
           <strong>{uncategorizedCount}</strong>{' '}
           {uncategorizedCount === 1 ? 'transaction is' : 'transactions are'} still waiting for a
           category, so the figures above are incomplete.{' '}
-          <Link to={transactionsHref(year, month)}>Review them</Link>.
+          <Link to={reviewQueueHref(year, month)}>Review them</Link>.
         </p>
       )}
 
