@@ -5,9 +5,11 @@ import { transactionsApi, type Transaction } from '../api/transactions'
 /**
  * Everything the ledger spread reads for one month, derived in one place.
  *
- * Only budgeted categories come back from `/budgets`, so unbudgeted spend, the
- * uncategorised queue and the Need/Want split are computed here from the
- * month's transactions rather than from new endpoints — the API is untouched.
+ * Only budgeted categories come back from `/budgets`, so unbudgeted spend and
+ * the Need/Want split are computed here from the month's transactions. The
+ * review queue is the exception: which transactions have no category is the
+ * server's to say, so it is asked for rather than inferred from ids this page
+ * happens not to recognise.
  */
 
 export type MonthState = 'past' | 'current' | 'future'
@@ -82,13 +84,22 @@ export async function fetchMonthSummary(
 ): Promise<MonthSummary> {
   const { dateFrom, dateTo } = monthBounds(year, month)
 
-  const [budgets, categories, transactions] = await Promise.all([
+  const [budgets, categories, transactions, uncategorized] = await Promise.all([
     budgetsApi.fetchForMonth(year, month),
     categoriesApi.fetchAll(),
     transactionsApi.fetchAll({ dateFrom, dateTo }),
+    transactionsApi.fetchAll({ dateFrom, dateTo, uncategorized: true }),
   ])
 
-  return buildMonthSummary({ year, month, budgets, categories, transactions, today })
+  return buildMonthSummary({
+    year,
+    month,
+    budgets,
+    categories,
+    transactions,
+    uncategorizedCount: uncategorized.length,
+    today,
+  })
 }
 
 export function buildMonthSummary({
@@ -97,6 +108,7 @@ export function buildMonthSummary({
   budgets,
   categories,
   transactions,
+  uncategorizedCount,
   today = new Date(),
 }: {
   year: number
@@ -104,6 +116,7 @@ export function buildMonthSummary({
   budgets: BudgetWithActual[]
   categories: Category[]
   transactions: Transaction[]
+  uncategorizedCount: number
   today?: Date
 }): MonthSummary {
   const state = monthStateFor(year, month, today)
@@ -127,6 +140,7 @@ export function buildMonthSummary({
   // Spend in a category nobody set a limit for. Invisible in ticket 06; an entry here.
   const spendByCategory = new Map<number, Transaction[]>()
   for (const transaction of transactions) {
+    if (transaction.categoryId === null) continue
     const bucket = spendByCategory.get(transaction.categoryId)
     if (bucket) bucket.push(transaction)
     else spendByCategory.set(transaction.categoryId, [transaction])
@@ -141,10 +155,6 @@ export function buildMonthSummary({
     }))
     .filter((entry) => entry.actual !== 0)
     .sort((a, b) => b.actual - a.actual)
-
-  // Rows whose category no longer resolves are awaiting review. CSV import
-  // (ticket 10) is what will start filling this; today it settles at zero.
-  const uncategorizedCount = transactions.filter((t) => !nameOf.has(t.categoryId)).length
 
   const outgoing = transactions.filter((t) => t.amount < 0)
 

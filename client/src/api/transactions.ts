@@ -7,7 +7,8 @@ export const needWants: NeedWant[] = ['Need', 'Want']
 export interface Transaction {
   id: number
   accountId: number
-  categoryId: number
+  /** Null is the review queue: an imported transaction nobody has filed yet. */
+  categoryId: number | null
   date: string
   amount: number
   description: string
@@ -31,6 +32,8 @@ export interface TransactionFilters {
   dateTo?: string
   needWant?: NeedWant
   tagId?: number
+  /** Just the review queue — the transactions with no category. */
+  uncategorized?: boolean
 }
 
 function buildQuery(filters: TransactionFilters): string {
@@ -41,6 +44,7 @@ function buildQuery(filters: TransactionFilters): string {
   if (filters.dateTo) params.set('dateTo', filters.dateTo)
   if (filters.needWant) params.set('needWant', filters.needWant)
   if (filters.tagId) params.set('tagId', String(filters.tagId))
+  if (filters.uncategorized) params.set('uncategorized', 'true')
   const query = params.toString()
   return query ? `?${query}` : ''
 }

@@ -118,6 +118,41 @@ public class FetchAllTests : IClassFixture<BudgetApiFactory>
         Assert.Empty(Assert.Single(list!.Where(t => t.Id == untagged.Id)).TagIds);
     }
 
+    [Fact]
+    public async Task FetchAll_FilteredToUncategorized_ReturnsOnlyTransactionsWithNoCategory()
+    {
+        var client = _factory.CreateClient();
+        await client.LoginAsync(BudgetApiFactory.SeededUser1Email, BudgetApiFactory.SeededUser1Password);
+        var accountId = await TransactionsTestHelpers.CreateAccountAsync(client, $"Review Queue {Guid.NewGuid():N}");
+        var categoryId = await TransactionsTestHelpers.CreateCategoryAsync(client, $"Review Queue {Guid.NewGuid():N}");
+        var categorized = await CreateTransactionAsync(client, accountId, categoryId, new DateOnly(2026, 8, 1), NeedWant.Need);
+        await TransactionsTestHelpers.ImportSignedAmountFixtureAsync(client, accountId);
+
+        var list = await client.GetFromJsonAsync<List<FetchAll.Response>>(
+            $"/api/transactions?accountId={accountId}&uncategorized=true", TestClientExtensions.JsonOptions);
+
+        // The six rows the fixture imports, and not the one a person filed.
+        Assert.Equal(6, list!.Count);
+        Assert.All(list, t => Assert.Null(t.CategoryId));
+        Assert.DoesNotContain(list, t => t.Id == categorized.Id);
+    }
+
+    [Fact]
+    public async Task FetchAll_WithUncategorizedFalse_ReturnsEverything()
+    {
+        var client = _factory.CreateClient();
+        await client.LoginAsync(BudgetApiFactory.SeededUser1Email, BudgetApiFactory.SeededUser1Password);
+        var accountId = await TransactionsTestHelpers.CreateAccountAsync(client, $"Not Only Queue {Guid.NewGuid():N}");
+        var categoryId = await TransactionsTestHelpers.CreateCategoryAsync(client, $"Not Only Queue {Guid.NewGuid():N}");
+        await CreateTransactionAsync(client, accountId, categoryId, new DateOnly(2026, 8, 1), NeedWant.Need);
+        await TransactionsTestHelpers.ImportSignedAmountFixtureAsync(client, accountId);
+
+        var list = await client.GetFromJsonAsync<List<FetchAll.Response>>(
+            $"/api/transactions?accountId={accountId}&uncategorized=false", TestClientExtensions.JsonOptions);
+
+        Assert.Equal(7, list!.Count);
+    }
+
     private static async Task<Create.Response> CreateTransactionAsync(
         HttpClient client, int accountId, int categoryId, DateOnly date, NeedWant needWant)
     {

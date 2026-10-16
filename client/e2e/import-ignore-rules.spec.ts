@@ -55,7 +55,7 @@ async function previewCsv(page: Page, accountName: string, csv: string = NOISY_C
 /** The counts under the double rule: what the whole screen exists to make trustworthy. */
 async function expectTally(page: Page, willImport: number, skipped: number) {
   const tally = page.locator('.exceptions')
-  await expect(tally.locator('.exception', { hasText: 'Rows will import' })).toContainText(String(willImport))
+  await expect(tally.locator('.exception', { hasText: 'For review' })).toContainText(String(willImport))
   await expect(tally.locator('.exception', { hasText: 'Skipped by a rule' })).toContainText(String(skipped))
 }
 
@@ -210,7 +210,7 @@ test('a row that cannot be read keeps its description and can still seed a rule'
   await expect(page.getByRole('region', { name: 'Preview' })).toBeVisible()
 
   // Unreadable rows are named in the margin rather than given a count of their own.
-  await expect(page.getByText('could not be read and are not counted above')).toBeVisible()
+  await expect(page.getByText('could not be read, so nothing can be imported yet')).toBeVisible()
   await expectTally(page, 0, 0)
 
   // The row still prints what it does know, and is still the place a rule gets written from —

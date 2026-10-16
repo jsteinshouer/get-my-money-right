@@ -659,8 +659,10 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
   transform-origin: left center;
 }
 
-/* The row is never tinted; only the figure steps back. */
-.preview-entry[data-skipped='true'] .reading-amount { color: var(--ink-3); }
+/* The row is never tinted; only the figure steps back. A duplicate steps back the same way without
+   the stroke: no rule caught it, the ledger already holds it. */
+.preview-entry[data-skipped='true'] .reading-amount,
+.preview-entry[data-duplicate='true'] .reading-amount { color: var(--ink-3); }
 
 /* The single authored moment: the rule you just wrote acting on the row that provoked it. */
 @keyframes strike-through {
@@ -712,6 +714,15 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
   background: none;
   border-color: transparent;
   border-bottom-color: var(--signal);
+}
+
+/* The close after an import: the tally's frame, carrying one sentence of what was written. */
+.import-result {
+  border: 1px solid var(--rule-strong);
+  background: var(--paper-field);
+  padding: var(--gap-3) var(--gap-4);
+  font-weight: 650;
+  color: var(--ink);
 }
 
 /* The slip is written under the row it corrects, as it is on Transactions — never over it. */

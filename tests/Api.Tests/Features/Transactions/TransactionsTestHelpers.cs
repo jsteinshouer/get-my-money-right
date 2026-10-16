@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using Api.Tests.Fixtures;
 using AccountsFeature = Api.Features.Accounts.Accounts;
+using ImportFeature = Api.Features.Import.Import;
 using CategoriesFeature = Api.Features.Categories.Categories;
 using TagsFeature = Api.Features.Tags.Tags;
 
@@ -31,5 +32,16 @@ internal static class TransactionsTestHelpers
         response.EnsureSuccessStatusCode();
         var body = (await response.Content.ReadFromJsonAsync<TagsFeature.Create.Response>())!;
         return body.Id;
+    }
+
+    /// <summary>
+    /// Six uncategorized Wants on the account, by the only route that makes them: an import.
+    /// </summary>
+    public static async Task ImportSignedAmountFixtureAsync(HttpClient client, int accountId)
+    {
+        await Import.ImportTestHelpers.SaveMappingAsync(client, accountId, new ImportFeature.SaveMapping.Command(
+            "Posted Date", "Payee", "Amount", null, null, "MM/dd/yyyy", ",", true));
+        var preview = await Import.ImportTestHelpers.UploadOkAsync(client, accountId, "signed-amount.csv");
+        (await client.PostAsync($"/api/import/previews/{preview.Token}/confirm", null)).EnsureSuccessStatusCode();
     }
 }

@@ -58,6 +58,13 @@ public static class ImportTestHelpers
         return (await response.Content.ReadFromJsonAsync<CreateIgnoreRule.Response>(TestClientExtensions.JsonOptions))!;
     }
 
+    public static async Task SaveMappingAsync(HttpClient client, int accountId, SaveMapping.Command command)
+    {
+        var response = await client.PutAsJsonAsync(
+            $"/api/import/mappings/{accountId}", command, TestClientExtensions.JsonOptions);
+        response.EnsureSuccessStatusCode();
+    }
+
     public static async Task<HttpClient> LoggedInClientAsync(BudgetApiFactory factory)
     {
         var client = factory.CreateClient();

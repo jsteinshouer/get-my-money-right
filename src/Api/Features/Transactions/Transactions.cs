@@ -14,7 +14,12 @@ public static partial class Transactions
     {
         public int Id { get; set; }
         public int AccountId { get; set; }
-        public int CategoryId { get; set; }
+
+        /// <summary>
+        /// Null is a real state, not a missing value: an uncategorized transaction is in the review
+        /// queue (ADR-0001). Imports are the usual way in; manual entry always names a category.
+        /// </summary>
+        public int? CategoryId { get; set; }
         public DateOnly Date { get; set; }
         public decimal Amount { get; set; }
         public required string Description { get; set; }

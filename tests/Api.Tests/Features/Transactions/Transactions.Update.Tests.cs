@@ -78,4 +78,54 @@ public class UpdateTests : IClassFixture<BudgetApiFactory>
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Update_ToNoCategory_ReturnsBadRequestAndKeepsTheCategory()
+    {
+        var client = _factory.CreateClient();
+        await client.LoginAsync(BudgetApiFactory.SeededUser1Email, BudgetApiFactory.SeededUser1Password);
+        var accountId = await TransactionsTestHelpers.CreateAccountAsync(client, "Update Clear Category Account");
+        var categoryId = await TransactionsTestHelpers.CreateCategoryAsync(client, "Update Clear Category Category");
+        var created = await client.PostAsJsonAsync(
+            "/api/transactions",
+            new Create.Command(accountId, categoryId, new DateOnly(2026, 1, 1), -10m, "Original", NeedWant.Need),
+            TestClientExtensions.JsonOptions);
+        var createdTransaction = (await created.Content.ReadFromJsonAsync<Create.Response>(TestClientExtensions.JsonOptions))!;
+
+        var response = await client.PutAsync(
+            $"/api/transactions/{createdTransaction.Id}",
+            new StringContent(
+                $$"""{"accountId":{{accountId}},"categoryId":null,"date":"2026-01-01","amount":-10,"description":"Original","needWant":"Need"}""",
+                System.Text.Encoding.UTF8,
+                "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var list = await client.GetFromJsonAsync<List<FetchAll.Response>>(
+            $"/api/transactions?accountId={accountId}", TestClientExtensions.JsonOptions);
+        Assert.Equal(categoryId, Assert.Single(list!).CategoryId);
+    }
+
+    [Fact]
+    public async Task Update_AnImportedTransaction_GivingItACategory_TakesItOutOfTheReviewQueue()
+    {
+        var client = _factory.CreateClient();
+        await client.LoginAsync(BudgetApiFactory.SeededUser1Email, BudgetApiFactory.SeededUser1Password);
+        var accountId = await TransactionsTestHelpers.CreateAccountAsync(client, $"Update Review {Guid.NewGuid():N}");
+        var categoryId = await TransactionsTestHelpers.CreateCategoryAsync(client, $"Update Review {Guid.NewGuid():N}");
+        await TransactionsTestHelpers.ImportSignedAmountFixtureAsync(client, accountId);
+        var queue = await client.GetFromJsonAsync<List<FetchAll.Response>>(
+            $"/api/transactions?accountId={accountId}&uncategorized=true", TestClientExtensions.JsonOptions);
+        var kroger = queue!.Single(t => t.Description == "KROGER #442");
+
+        var response = await client.PutAsJsonAsync(
+            $"/api/transactions/{kroger.Id}",
+            new Update.Command(accountId, categoryId, kroger.Date, kroger.Amount, kroger.Description, NeedWant.Need),
+            TestClientExtensions.JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var after = await client.GetFromJsonAsync<List<FetchAll.Response>>(
+            $"/api/transactions?accountId={accountId}&uncategorized=true", TestClientExtensions.JsonOptions);
+        Assert.Equal(queue!.Count - 1, after!.Count);
+        Assert.DoesNotContain(after, t => t.Id == kroger.Id);
+    }
 }

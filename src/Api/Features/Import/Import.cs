@@ -52,9 +52,11 @@ public static partial class Import
 
     public static IServiceCollection AddImportFeature(this IServiceCollection services) => services
         .AddSingleton<PreviewCache>()
+        .AddScoped<Pipeline>()
         .AddUploadPreview()
         .AddReadPreview()
         .AddReadAllRows()
+        .AddConfirm()
         .AddSaveMapping()
         .AddFetchMapping()
         .AddCreateIgnoreRule()
@@ -71,6 +73,7 @@ public static partial class Import
             .MapUploadPreview()
             .MapReadPreview()
             .MapReadAllRows()
+            .MapConfirm()
             .MapSaveMapping()
             .MapFetchMapping()
             .MapCreateIgnoreRule()

@@ -307,7 +307,7 @@ namespace Api.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("CategoryId")
+                    b.Property<int?>("CategoryId")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("CreatedByUserId")
@@ -554,8 +554,7 @@ namespace Api.Migrations
                     b.HasOne("Api.Features.Categories.Categories+Category", null)
                         .WithMany()
                         .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Api.Data.ApplicationUser", null)
                         .WithMany()

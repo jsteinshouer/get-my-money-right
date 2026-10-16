@@ -8,9 +8,13 @@ public static partial class Transactions
 {
     public static partial class FetchAll
     {
-        public record class Query(int? AccountId = null, int? CategoryId = null, DateOnly? DateFrom = null, DateOnly? DateTo = null, NeedWant? NeedWant = null, int? TagId = null);
+        /// <summary>
+        /// <paramref name="Uncategorized"/> true narrows to the review queue: the transactions with no
+        /// category, which is the only thing that marks one as not yet judged by a person.
+        /// </summary>
+        public record class Query(int? AccountId = null, int? CategoryId = null, DateOnly? DateFrom = null, DateOnly? DateTo = null, NeedWant? NeedWant = null, int? TagId = null, bool? Uncategorized = null);
 
-        public record class Response(int Id, int AccountId, int CategoryId, DateOnly Date, decimal Amount, string Description, NeedWant NeedWant)
+        public record class Response(int Id, int AccountId, int? CategoryId, DateOnly Date, decimal Amount, string Description, NeedWant NeedWant)
         {
             /// <summary>Filled in from the tag assignments after the transaction itself is mapped.</summary>
             public IReadOnlyList<int> TagIds { get; init; } = [];
@@ -39,6 +43,7 @@ public static partial class Transactions
                 var transactions = await _db.Transactions
                     .Where(t => query.AccountId == null || t.AccountId == query.AccountId)
                     .Where(t => query.CategoryId == null || t.CategoryId == query.CategoryId)
+                    .Where(t => query.Uncategorized != true || t.CategoryId == null)
                     .Where(t => query.DateFrom == null || t.Date >= query.DateFrom)
                     .Where(t => query.DateTo == null || t.Date <= query.DateTo)
                     .Where(t => query.NeedWant == null || t.NeedWant == query.NeedWant)

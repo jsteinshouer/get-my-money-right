@@ -67,8 +67,9 @@ public static partial class Budgets
                 // Summed in memory rather than with a SQL GROUP BY: SQLite has no native decimal
                 // type, so aggregating money columns in the database loses precision.
                 var amounts = await _db.Transactions
-                    .Where(t => categoryIds.Contains(t.CategoryId) && t.Date >= monthStart && t.Date <= monthEnd)
-                    .Select(t => new { t.CategoryId, t.Amount })
+                    .Where(t => t.CategoryId != null && categoryIds.Contains(t.CategoryId.Value)
+                        && t.Date >= monthStart && t.Date <= monthEnd)
+                    .Select(t => new { CategoryId = t.CategoryId!.Value, t.Amount })
                     .ToListAsync(cancellationToken);
 
                 return amounts
