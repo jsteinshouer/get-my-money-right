@@ -5,190 +5,299 @@ primary_target: "client/src/pages/IgnoreRulesPage.tsx"
 related_targets: ["client/src/pages/ImportPage.tsx"]
 ---
 
-# Surface brief — Ignore rules & the import preview (`/import` station 3, `/import/rules`)
+# Surface brief — The import reading (`/import` station 3, `/import/rules`)
 
-Ticket #9 of 12 (https://github.com/jsteinshouer/get-my-money-right/issues/9), where this brief is
-also published. Produced by `shape` and confirmed by the user on 2026-09-24.
+Covers **ticket 10** (issue #10, amended) and **tickets 13–14** of the
+[Import Assignment Rules spec](https://github.com/jsteinshouer/get-my-money-right/blob/main/docs/specs/import-assignment-rules.md).
+Produced by `shape` and confirmed by the user on 2026-09-25.
 
-Extends the ticket #8 brief for `/import`
-([client-src-pages-importpage-tsx.md](client-src-pages-importpage-tsx.md)), which built stations 1
-and 2 and left station 3 present but inert. This ticket fills that frame rather than replacing it.
+**Rewrites this surface's ticket #9 brief** rather than sitting beside it: the surface is the same
+one, grown. Everything #9 shipped that still holds is carried forward below — the strike, the
+tally, the from-row slip, the matching semantics. Two of #9's anti-goals are **deliberately
+reversed** by the spec, and a builder reading the closed #9 issue will find the old wording:
+
+1. *"a rule that also assigns a category"* was an anti-goal. It is now the entire feature.
+2. *"No override. A struck row is skipped; if that is wrong, the rule is wrong."* still holds for
+   **skipping**. It does **not** hold for classification: a row's category, Need/Want and tags are
+   correctable in place before the import commits.
 
 Established visual world:
 **The Ruled Cash Book** ([DESIGN.md](https://github.com/jsteinshouer/get-my-money-right/blob/main/DESIGN.md)).
-No new visual direction. Product truth lives in
-[PRODUCT.md](https://github.com/jsteinshouer/get-my-money-right/blob/main/PRODUCT.md).
+No new visual direction. Domain vocabulary is in
+[CONTEXT.md](https://github.com/jsteinshouer/get-my-money-right/blob/main/CONTEXT.md); the two
+decisions this rests on are [ADR-0001](https://github.com/jsteinshouer/get-my-money-right/blob/main/docs/adr/0001-uncategorized-is-a-real-state.md)
+and [ADR-0002](https://github.com/jsteinshouer/get-my-money-right/blob/main/docs/adr/0002-assignment-rules-apply-at-import-only.md).
 
 ## 1. Job and audience
 
-**Visitor mode: Operate.** Desk session only.
+**Visitor mode: Operate.** Desk session, laptop, the monthly ritual. Not held to the 400px bar.
 
-A household member one station further into the import they started in #8. The mapping is settled;
-they are now looking at what the file will actually put in their transaction list — and seeing, for
-the first time, the recurring noise they never want: autopay confirmations, the transfer to savings,
-the card payment that is the same money counted twice.
+The same household member as #9, at the same station, but the station's job has changed twice over.
+In #9 they were checking what the app would *throw away*. Now they are reading what it will
+**file** — and, for the first time, the app is showing that it has learned something. The first
+import after writing a handful of rules is the moment the product either earns the monthly ritual
+or doesn't.
 
-Their state of mind is **suspicion, not curiosity**. They are checking the app before trusting it.
-Product principle 2 — *trust is built from counts, not assurances* — is the whole job of this screen.
+State of mind is still **suspicion, not curiosity** — but a second feeling arrives with it:
+*impatience*. A 400-row file that classifies itself is only trustworthy if the household can see,
+without scrolling all of it, how much it got right and what is left over.
 
 ## 2. Outcome and proof
 
-They end knowing **exactly which rows are going in, which are not, and why** — and able to write the
-rule that drops a noise row without leaving the page or remembering its wording.
+They end knowing four things and able to act on all of them without leaving the page:
 
-Product truth no generic importer carries: **there is no Transfer entity.** The inter-account
-transfer is dropped by the same text rule as any other noise, so the rule mechanism has to be good
-enough to carry a modeling decision on its back.
+- which rows are going in, **and how each one will be filed**
+- which rows nobody has taught the app about yet, and therefore what the review queue will cost them
+- which rows are skipped, and by which rule
+- which rows are duplicates already in the ledger (ticket 10)
 
-## 3. Selected direction — the reading, grown to the whole file
+Product truth no generic importer carries: **Need/Want is a per-transaction judgment that may not
+be absent** (PRODUCT principle 3). A row nobody has classified does not get to be blank — it prints
+as a **Want** and says so before it lands, because a guess made in the open is honest and a guess
+made silently is not. That single line of type is the product's whole position on discretionary
+spending, stated on the screen where it is decided.
 
-Station 3 is not a new screen. **It is `.reading` — the reads-as block #8 already prints under the
-double rule — carrying every row instead of one.** The rehearsal on the Map step becomes the
-performance.
+## 3. Selected direction — the reading, now classified
 
-```
-UPLOAD ──── MAP COLUMNS ──── PREVIEW & CONFIRM
-  ✓             ✓                  ●
-
-Aug 14   Kroger #442                      −84.19
-Aug 15   Shell Oil 5578                   −41.02
-A̶u̶g̶ ̶1̶5̶ ̶ ̶ ̶A̶u̶t̶o̶p̶a̶y̶ ̶T̶h̶a̶n̶k̶ ̶Y̶o̶u̶ ̶ ̶ ̶ ̶ ̶ ̶ ̶ ̶ ̶+̶3̶1̶2̶.̶0̶0̶
-         Skipped · contains AUTOPAY
-Aug 16   Trader Joe's #221                −63.40
-═══════════════════════════════════════════════
-41 rows will import · 3 skipped by a rule
-```
-
-Three devices, all of them already in the system:
-
-- **The strike is a drawn rule, not `text-decoration`.** One continuous oxblood hairline across the
-  full entry — date, description and amount together — the pen stroke a cash book makes through a
-  line that does not count. `line-through` would break into three disconnected segments across the
-  grid and read as a typographic effect rather than a mark on the page. The row is **never tinted**;
-  the figure drops to `--ink-3`. The stroke is decorative and `aria-hidden`.
-- **The reason is visible text under the entry**, in the tracked-caps register:
-  `Skipped · contains AUTOPAY`. It names the rule that caught the row, so an over-broad rule is
-  diagnosable at a glance, and screen readers get the state from real text rather than ARIA.
-- **The tally is `.exceptions`**, printed as entries under the double rule — never a badge or toast.
-  `aria-live="polite"`, so saving a rule announces the new counts. In #10 the duplicate count joins
-  this same line; the frame does not change.
-
-### The focal moment — the rule is born from the row
-
-Every **unstruck** row carries a persistent trailing control, `Ignore rows like this`. It opens a
-slip *beneath that row* — the `CorrectionSlip` idiom already established on Transactions: a
-correction is written on a slip under its entry, as a real form, never a modal.
+Station 3 is still `.reading` — the reads-as block, carrying every row. The composition does not
+change. **What each row carries under it does.**
 
 ```
-Aug 15   Autopay Thank You                +312.00
-┌───────────────────────────────────────────────┐
-│ Skip rows where the description                │
-│   [ contains ▾ ]  [ AUTOPAY THANK YOU       ]  │
-│   for [ Sapphire Card ▾ ]                      │
-│                      [ Add rule ] [ Cancel ]   │
-└───────────────────────────────────────────────┘
+Aug 14   Kroger #442                       −84.19
+         GROCERIES · NEED · contains KROGER
+
+Aug 15   Delta Air Lines 0062             −412.80
+         TRAVEL · WANT · +VACATION 2026 · 2 rules
+
+A̶u̶g̶ ̶1̶5̶   A̶u̶t̶o̶p̶a̶y̶ ̶T̶h̶a̶n̶k̶ ̶Y̶o̶u̶              +̶3̶1̶2̶.̶0̶0̶
+         SKIPPED · contains AUTOPAY
+
+Aug 16   Trader Joe's #221                 −63.40
+         NO CATEGORY · WANT · for review
+
+Aug 17   Shell Oil 5578                    −41.02
+         GROCERIES · NEED · your correction
+═══════════════════════════════════════════════════
+38 classified · 6 for review · 3 skipped · 2 duplicates
 ```
 
-Match text is pre-filled from **the normalized description the row is showing** — matching against
-anything else would strike a row for text the household never saw. Scope offers the import's account
-or *All accounts*.
+**One device, four states.** The second line is the same tracked-caps register #9 established for
+`Skipped · contains AUTOPAY`. It is real text, not an ARIA label — screen readers and sighted
+readers get the same sentence — and it reads in `--ink-3` except where it carries a correction
+mark. Four forms, and no fifth:
 
-On save, the preview re-reads and **the row strikes itself in place**: the pen stroke draws across
-the row, ~260ms on the same exponential ease as `spread-turn`, and the tally above it re-counts. That
-is the single authored moment of this ticket and the entire payoff — the rule you just wrote acting
-on the row that provoked it, without a navigation. It collapses to an instant state change under
-`prefers-reduced-motion`.
+| Row state | Second line |
+|---|---|
+| Classified by rules | `GROCERIES · NEED · contains KROGER` |
+| Classified, several rules contributed | assignments, then `· 2 rules` |
+| Nothing matched | `NO CATEGORY · WANT · for review` |
+| Skipped | `SKIPPED · contains AUTOPAY` (unchanged from #9) |
+| Corrected by hand | assignments, then `· your correction` in `--signal` |
 
-No override. A struck row is skipped; if that is wrong, the rule is wrong.
+Tags print as `+VACATION 2026` in the same register, after the Need/Want. **Colour stays
+quarantined**: the line is achromatic in every form but the correction mark, which is the one place
+the cash book has always used oxblood — the household's own pen on the page.
 
-### `/import/rules` — the ledger of rules
+**Citation rule.** One contributing rule is named in full. Two or more collapse to `· 2 rules`,
+because naming three rules in a row's margin turns a ledger into a log; the slip names them all
+when opened. An over-broad rule stays diagnosable either way, which is the point #9 established.
 
-A ruled table, reached by a `.memo` link on the Import page and from the slip's confirmation. Not a
-masthead section: the masthead stays at seven.
+**The money grid is untouched.** Date, description and amount keep the columns and alignment they
+have had since #8. Adding category and Need/Want as columns was considered and declined: it
+squeezes the description, moves the money column off its established position, and leaves the rule
+citation nowhere to live.
 
-| MATCH | SCOPE | |
-|---|---|---|
-| contains **AUTOPAY** | All accounts | Delete |
-| contains **TRANSFER TO SAVINGS** | Checking | Delete |
+### The focal moment — one slip, three outcomes
 
-Global rules first, then by account name. Its own add form sits above the table (the e2e path creates
-a rule before ever uploading a file). Delete uses the existing inline `.confirm` panel, not a browser
-dialog.
+Every row carries **one** trailing control, `What is this?`, including struck rows (whose slip opens
+on the skip branch, so an over-broad ignore rule is reachable from the row it wrongly caught). It
+opens the `CorrectionSlip` idiom beneath that row: the entry stays on its line, the correction is
+written on a slip under it, as a real form.
+
+```
+Aug 16   Trader Joe's #221                 −63.40
+         NO CATEGORY · WANT · for review   [ What is this? ]
+┌─────────────────────────────────────────────────┐
+│ THIS ROW IS                                     │
+│  [ Groceries ▾ ]  [ Need ▾ ]  [ + tag ]         │
+│                                                 │
+│ APPLIES TO                                      │
+│  ( ) this row only                              │
+│  (•) every row where the description            │
+│      [ contains ▾ ] [ TRADER JOE'S        ]     │
+│      for [ All accounts ▾ ]                     │
+│  ( ) skip rows like this instead                │
+│                            [ Save ] [ Cancel ]  │
+└─────────────────────────────────────────────────┘
+```
+
+This is the structural thesis of the ticket: **at the row, there is one question — what is this? —
+and the rule is just how far the answer reaches.** "Import rule, two kinds" stops being a data
+model and becomes the thing the household actually touches. The ignore rule is no longer a separate
+affordance; it is the third radio.
+
+- *This row only* → a one-off override on the pending import. Writes no rule. The row's second line
+  re-reads with `· your correction`.
+- *Every row where…* → an assignment rule, prefilled from the row's **normalized description** —
+  matching against anything else would classify rows by text the household never saw.
+- *Skip rows like this instead* → exactly #9's ignore rule, unchanged in semantics and wording.
+  Choosing it disables the assignment fields rather than hiding them, so the slip does not resize
+  under the cursor.
+
+**On save with a rule**, the file re-reads and the rows the rule touched acquire their second line
+in place — the counts above re-count, `aria-live="polite"`. On the skip branch the pen stroke draws
+as it already does. Reuse the strike's curve and duration exactly (~260ms, the `spread-turn`
+exponential); **no new motion vocabulary**, and everything collapses to an instant state change
+under `prefers-reduced-motion`.
+
+**On save with *this row only***, nothing re-reads but that row. A one-off must feel cheaper than a
+rule or nobody will reach for it.
+
+### The close — ticket 10's confirm
+
+#9 ended with a memo saying nothing was saved. That memo goes. The reading now closes under its
+double rule with the counts as `.exceptions` entries, then the action:
+
+```
+═══════════════════════════════════════════════════
+  38 classified                                 38
+  for review                                     6
+  skipped by a rule                              3
+  already imported                               2
+                                    [ Import 44 rows ]
+```
+
+The button names the number it will write, because a button that says `Import` and a tally that
+says 44 are two facts the household has to reconcile themselves. After it runs, the same block
+prints the result — `Imported 44 · skipped 3 by a rule · skipped 2 as duplicates` — plus a `.memo`
+pointing at the work it created: *"6 transactions are waiting for a category."* linking to the
+review queue. That memo is the handoff from import to the monthly ritual, and it is the only place
+the two connect.
+
+### `/import/rules` — two ruled sections
+
+The page keeps its route and its shape, and grows a second section. Classify first, skip second:
+the household writes ten of the first for every two of the second, and the page should open on the
+thing they came for.
+
+```
+IMPORT RULES
+
+RULES THAT CLASSIFY A ROW
+─────────────────────────────────────────────────────
+contains KROGER            Groceries · Need    All    Delete
+contains DELTA             Travel · Want       All    Delete
+contains DELTA             +Vacation 2026      All    Delete
+starts with SQ *           Need                Amex   Delete
+
+RULES THAT SKIP A ROW
+─────────────────────────────────────────────────────
+contains AUTOPAY                               All    Delete
+contains TRANSFER TO SAVINGS              Checking    Delete
+```
+
+Each rule reads back as a sentence — `contains KROGER` in the match column, its assignments beside
+it, its scope, its delete. A rule that sets only Need/Want or only a tag prints only that; the
+column does not pad with dashes. Global rules first, then by account name, matching #9. Each section
+has its own add form above it and its own ruled empty state. Delete stays the inline `.confirm`
+panel, never a browser dialog.
 
 ## 4. Scope and boundaries
 
-**Build — API:** `ImportIgnoreRule` entity + migration; create, fetch-all, delete under
-`Features/Import/`; a new full-file preview operation carrying per-row skip reasons
-(`Import.ReadPreview` stays the Map step's 5-row rehearsal — different response, different operation,
-per REPR).
+**Ticket 10 — build:** the confirm operation and its counts; the optional-category migration; the
+Want default; the `.exceptions` close, the Import action, the result block and the review-queue
+memo; duplicate marks on rows.
 
-**Build — client:** station 3 live and read-only; the from-row slip; `/import/rules`.
+**Ticket 13 — build:** the assignment rule entity and its create/fetch/delete operations; the shared
+matcher; the classify section on `/import/rules` with its add form, sentences and empty state.
 
-**Untouched:** stations 1 and 2 and every #8 API contract, status, transactions, budgets, categories,
-tags, accounts, auth.
+**Ticket 14 — build:** resolution across the whole file; the second line in all its forms; the
+one-slip-three-outcomes affordance; one-off overrides carried into confirm.
 
-**Still nothing is written to `Transactions`.** Station 3 ends with a memo saying so: *"Nothing is
-saved yet. Importing arrives with the next ticket."*
+**Untouched:** stations 1 and 2 and every #8 API contract; the masthead (it stays at seven sections
+— `/import/rules` is still reached by a `.memo`, not a nav item); budgets; accounts; auth; the
+strike device and its reason wording; the money grid.
 
-**Deferred to #10, and the frame must not change to admit them:** duplicate marks on the same rows,
-the Import action, the three result counts.
-
-**Anti-goals:** modals, toasts, "skipped" pills or badges, tinted or red rows, a trash icon with no
-label, per-row un-skip, regex, a rule that also assigns a category, any auto-generated starter rules.
+**Anti-goals:** modals, toasts, badges or pills for any of this; tinted or coloured rows; a
+category column in the reading; per-row un-skip as a separate control (it is the slip's third
+radio); regex or wildcard match text; auto-suggested rules; a rules preview that guesses what the
+household might want; virtualization or pagination of the reading; any second authored motion
+beyond the strike's curve; a confirmation dialog on Import.
 
 ## 5. States and ranges
 
-Ranges: **0–12 rules** (realistically 2–6), match text 3–40 characters, files of **20–2000 rows**,
-all printed — no virtualization, no pagination.
+**Ranges:** assignment rules **0–40**, realistically 5–25 after a few months, against ignore rules'
+2–6. Files of 20–2000 rows, all printed. Match text 3–40 characters. Tags per rule 0–3. Categories
+5–25.
 
-- **No rules yet** — nothing is struck; the tally reads `44 rows will import`. The rules page prints
-  a ruled empty naming where rules usually come from: *"No ignore rules yet. Add one from a row in an
-  import preview."*
-- **Every row caught** — `0 rows will import · 47 skipped by a rule`, with a `.note[data-signal]`
-  beneath: the rule is almost certainly too broad, and it names which one.
-- **Duplicate rule** (same text, type and scope) — refused, named at the field via `.field-error`.
-- **Empty or whitespace-only match text** — refused at the field.
-- **Row that both matches a rule and fails to parse** — the pipeline is map → ignore → dedupe, so the
-  strike wins and the parse error is not printed. The row is leaving either way; two reasons would
-  read as two problems.
-- **Rule deleted while a preview is open** — the preview re-reads on return to station 3; rows
-  un-strike.
-- **Saving** — the struck rule already in the vocabulary. Never a spinner.
-- **409 / error** — existing conflict handling.
-- **Narrow** — the preview inherits `.table-scroll`; the page never scrolls sideways. Not held to the
-  400px bar (PRODUCT principle 1: import is desk work).
+- **No assignment rules yet** (the state on day one) — every row reads `NO CATEGORY · WANT · for
+  review` and the tally reads `0 classified · 44 for review`. This is not an error and must not be
+  dressed as one. The classify section's empty state names where rules come from: *"No rules yet.
+  Write one from a row in an import preview."*
+- **Rules exist but match nothing in this file** — silent. A rule that matched nothing is not worth
+  a line of the household's attention on this screen.
+- **Every row classified** — `44 classified · 0 for review`. The review memo after import does not
+  print when the count is zero.
+- **A rule and an ignore rule both match a row** — the strike wins and no assignments print; the
+  row is leaving either way, and two outcomes would read as a contradiction.
+- **A duplicate row that rules also classified** — duplicate mark wins in the same way.
+- **A row that fails to parse** — unchanged from #9: the error prints, no assignments, no slip
+  branch for classification (there is nothing to classify), but the rule branches stay reachable.
+- **Rule saved that matches zero rows** — the save succeeds, the tally does not move, and a
+  `.field-error`-register note in the slip's place says so plainly: *"Saved. Nothing in this file
+  matches it."* Silence here reads as a bug.
+- **Rule saved that matches everything** — the existing `.note[data-signal]` device from #9, adapted:
+  the rule is almost certainly too broad, and it is named.
+- **Duplicate rule** (same match text, type, scope and kind) — refused at the field.
+- **A rule setting nothing** — Save is unavailable until one of category, Need/Want or a tag is set,
+  with the reason in the tracked-caps register rather than on hover.
+- **Override then rule** on the same row — the rule wins for fields it sets and the second line
+  re-reads; the household's `· your correction` mark persists only for fields the rule left alone.
+- **Saving** — the struck rule under the control, never a spinner.
+- **409 / write conflict** — existing handling; SQLite is single-writer and both users may be at the
+  desk.
+- **Narrow** — `.table-scroll` as inherited; the second line wraps rather than truncating, since it
+  is the row's meaning and an ellipsis would hide the rule's name.
 
 ## 6. Constraints and open decisions
 
-**Binding:** React 19 + TS, new vocabulary extends `client/src/styles/ledger.css`; Minimal API REPR,
+**Binding:** React 19 + TS; new vocabulary extends `client/src/styles/ledger.css`; Minimal API REPR,
 one file per operation under `Features/Import/`; EF Core + SQLite; light-only; fonts self-hosted.
 
-**Matching semantics — fixed, not the builder's to choose:** case-insensitive, against the normalized
-description, whitespace trimmed and collapsed the same way #10's dedupe will normalize it.
-`MatchType` is `Contains | StartsWith | Equals`.
+**Fixed, not the builder's to choose** (from the spec and ADRs):
 
-**One deviation to flag:** the entity carries `IsActive` per the spec, and the preview filters on it —
-but the acceptance criteria name only create, fetch-all and delete. So rules are created active and
-**delete is the off switch**; there is no update endpoint and no active/inactive toggle in this
-ticket. A builder must not invent one.
+- Matching is **description-only**, case-insensitive, against the normalized description, with
+  `MatchType` of `Contains | StartsWith | Equals`. No raw CSV columns.
+- Resolution across several matching rules: category and Need/Want from the **first matching rule by
+  id** that sets them; tags **union**. Same first-by-id convention #9 established.
+- Pipeline order: map → ignore (terminal) → dedupe → assign → insert.
+- An unmatched row imports with **no category** and **Want**.
+- Rules are create/fetch/delete only. **No edit, no active toggle** — delete is the off switch, as
+  with ignore rules. A builder must not invent an update endpoint.
 
-**A builder must not invent:** regex or wildcard matching, rules that rewrite rather than skip,
-auto-suggested rules, category assignment at import, a fourth station, or any insert into
-`Transactions`.
+**Cross-surface consequence to honor:** deleting a category that an assignment rule references
+returns a conflict. The categories page must name how many rules use it, in the same plain register
+its transaction conflict already uses. That surface has no brief; do not redesign it, just make the
+message name the count.
 
-**Tests:** `WebApplicationFactory` integration tests per operation plus a preview test driving a
-fixture CSV containing a matching row and asserting the row comes back marked skipped with its
-reason. Playwright `client/e2e/import-ignore-rules.spec.ts`: create a rule at `/import/rules` →
-upload the fixture → map → confirm the matching row renders struck and the tally counts it — plus the
-from-row path, since that is the primary creation affordance and the e2e is the only thing that
-proves the strike-in-place works.
+**A builder must not invent:** amount or date conditions on a rule, rule priority or reordering,
+bulk apply from the rules page, automatic reclassification when a rule is saved, a reviewed flag
+separate from the absent category, suggested rules, a fourth station, or a masthead entry for
+`/import/rules`.
 
-**Confirmed with the user (2026-09-24):**
+**Tests:** `WebApplicationFactory` integration tests per operation, plus fixture CSVs covering a
+multi-rule row, a first-by-id collision, an ignore-beats-assign row, and unmatched rows landing with
+no category and Want. Playwright: extend `client/e2e/import-ignore-rules.spec.ts` for the slip's
+three branches, and add the full classified-import flow — upload → map → preview showing assigned
+rows citing their rules → override one row → import → the result counts and the review memo.
 
-1. **Preview scope** — 09 lights up station 3 as a full-file read-only preview; #10 adds dedupe
-   marks, the commit action and the three counts.
-2. **Rule home** — born from the preview row, managed at `/import/rules`. No new masthead section.
-3. **Override** — none. The rule is the rule; an over-broad rule gets edited, not bypassed per row.
+**Confirmed with the user (2026-09-25):**
 
-**Assumed, correct freely:** `/import/rules` as the route; global-first sort order; the trailing-cell
-placement of `Ignore rows like this`; 260ms for the strike.
+1. **Row print** — a second line under the entry, not columns in the grid, and unmatched rows print
+   their line too rather than staying bare.
+2. **Row affordance** — one slip, three outcomes; the ignore rule becomes its third radio.
+3. **Rules page** — two ruled sections on the one route, classify first.
+
+**Assumed, correct freely:** the `What is this?` control wording; classify-before-skip ordering on
+the rules page; the `· 2 rules` collapse at two or more citations; `· your correction` as the
+override mark; the Import button naming its row count; the review-queue memo's wording.
