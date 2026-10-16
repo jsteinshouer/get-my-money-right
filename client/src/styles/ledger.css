@@ -600,11 +600,16 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
   color: var(--ink-3);
   margin-bottom: var(--gap-3);
   max-width: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--gap-3);
 }
 
 /* The file's own name, as the household saved it: a name, not a label, so not set in caps. */
 .reading-file {
-  margin-left: var(--gap-3);
+  /* A flex item of the head, so it wraps to its own line as a whole name, flush left. */
+  overflow-wrap: anywhere;
   font-size: 0.8rem;
   font-weight: 500;
   font-stretch: 100%;
