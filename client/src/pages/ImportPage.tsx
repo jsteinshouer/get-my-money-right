@@ -1,6 +1,17 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+  type Ref,
+} from 'react'
 import { Link } from 'react-router-dom'
 import { accountsApi, type Account } from '../api/accounts'
+import { ApiError } from '../api/client'
 import {
   dateFormatLabel,
   dateFormats,
@@ -98,6 +109,23 @@ export function ImportPage() {
       .then(setAccounts)
       .catch(() => setLoadError('Failed to load accounts.'))
   }, [])
+
+  /**
+   * Each step opens on its own heading. Without this, every station change drops keyboard and
+   * screen-reader focus back to the top of the document, and the next thing read is the masthead.
+   */
+  const stepHeading = useRef<HTMLHeadingElement>(null)
+  const firstStep = useRef(true)
+  useEffect(() => {
+    if (firstStep.current) {
+      firstStep.current = false
+      return
+    }
+    stepHeading.current?.focus()
+  }, [step])
+
+  /** The row a rule was just written from: focus returns there once the file re-reads. */
+  const [focusRow, setFocusRow] = useState<number | null>(null)
 
   const readingRequest = useRef(0)
   /** What the file read as last time, so a row that has just been struck can draw its stroke. */
@@ -350,7 +378,12 @@ export function ImportPage() {
       setResult(outcome)
       setSlipRow(null)
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : 'The import failed. Nothing was written.')
+      // The server's own sentence when it refused; a plain one when it could not be reached at all.
+      setImportError(
+        error instanceof ApiError
+          ? error.message
+          : 'The import could not reach the server, so nothing was written. Try again.',
+      )
     } finally {
       setImporting(false)
     }
@@ -358,6 +391,7 @@ export function ImportPage() {
 
   /** No confirmation line: the row striking itself and the tally re-counting is the confirmation. */
   async function handleRuleSaved() {
+    setFocusRow(slipRow)
     setSlipRow(null)
     await readRows(true)
   }
@@ -370,15 +404,10 @@ export function ImportPage() {
       </hgroup>
 
       <ol className="stations" aria-label="Import steps">
-        <li className="station" data-state={step === 'upload' ? 'current' : 'done'}>
-          Upload
-        </li>
-        <li className="station" data-state={stationState(step, 'map')}>
-          Map columns
-        </li>
-        <li className="station" data-state={stationState(step, 'preview')}>
-          Preview &amp; confirm
-        </li>
+        <Station state={step === 'upload' ? 'current' : 'done'}>Upload</Station>
+        <Station state={stationState(step, 'map')}>Map columns</Station>
+        {/* Once the file is written there is no station left to be at: all three are settled. */}
+        <Station state={result !== null ? 'done' : stationState(step, 'preview')}>Preview &amp; confirm</Station>
       </ol>
 
       {loadError && <p role="alert">{loadError}</p>}
@@ -395,6 +424,7 @@ export function ImportPage() {
         </div>
       ) : step === 'upload' ? (
         <form onSubmit={handleUpload}>
+          <StepHeading ref={stepHeading}>Upload</StepHeading>
           <div className="well">
             <div className="well-fields">
               <label htmlFor="import-account">
@@ -456,6 +486,7 @@ export function ImportPage() {
         </form>
       ) : !preview || !draft ? null : step === 'map' ? (
         <form onSubmit={handleSave}>
+          <StepHeading ref={stepHeading}>Map columns</StepHeading>
           <FormatNote
             draft={draft}
             fileName={preview.fileName}
@@ -565,6 +596,8 @@ export function ImportPage() {
           </div>
         </form>
       ) : (
+        <>
+        <StepHeading ref={stepHeading}>Preview &amp; confirm</StepHeading>
         <PreviewStation
           accounts={accounts}
           accountId={preview.accountId}
@@ -580,11 +613,35 @@ export function ImportPage() {
           onOpenSlip={setSlipRow}
           onRuleSaved={handleRuleSaved}
           onImport={handleImport}
+          focusRow={focusRow}
+          onFocused={() => setFocusRow(null)}
           onBack={() => setStep('map')}
           onStartOver={startOver}
         />
+        </>
       )}
     </>
+  )
+}
+
+/** A station on the band. The current one says so to assistive technology, not only in ink. */
+function Station({ state, children }: { state: 'done' | 'current' | 'ahead'; children: ReactNode }) {
+  return (
+    <li className="station" data-state={state} aria-current={state === 'current' ? 'step' : undefined}>
+      {children}
+    </li>
+  )
+}
+
+/**
+ * The step's name as a heading, for the document outline and as the place focus lands. Hidden
+ * because the station band already says it in ink, one rule above.
+ */
+function StepHeading({ ref, children }: { ref: Ref<HTMLHeadingElement>; children: ReactNode }) {
+  return (
+    <h2 className="visually-hidden" tabIndex={-1} ref={ref}>
+      {children}
+    </h2>
   )
 }
 
@@ -646,6 +703,8 @@ function PreviewStation({
   importError,
   result,
   waiting,
+  focusRow,
+  onFocused,
   onOpenSlip,
   onRuleSaved,
   onImport,
@@ -663,12 +722,26 @@ function PreviewStation({
   importError: string | null
   result: ImportResult | null
   waiting: number
+  focusRow: number | null
+  onFocused: () => void
   onOpenSlip: (index: number | null) => void
   onRuleSaved: () => void
   onImport: () => void
   onBack: () => void
   onStartOver: () => void
 }) {
+  const readingRef = useRef<HTMLElement>(null)
+
+  // After a rule is written the slip closes under the cursor; focus goes back to the row it was
+  // written from, which now carries its strike and the rule's name.
+  useEffect(() => {
+    if (focusRow === null || rows === null) {
+      return
+    }
+    readingRef.current?.querySelector<HTMLElement>(`[data-entry="${focusRow}"]`)?.focus()
+    onFocused()
+  }, [focusRow, rows, onFocused])
+
   if (rowsError) {
     return (
       <>
@@ -692,13 +765,18 @@ function PreviewStation({
 
   return (
     <>
-      <section className="reading" aria-label="Preview">
-        <p className="reading-head">{fileName}, every row as it will be read</p>
+      <section className="reading" aria-label="Preview" ref={readingRef}>
+        <p className="reading-head">
+          {imported ? 'Every row, as it was read' : 'Every row, as it will be read'}
+          <span className="reading-file">{fileName}</span>
+        </p>
 
         {rows.rows.map((row, index) => (
           <Fragment key={index}>
             <div
               className="preview-entry"
+              data-entry={index}
+              tabIndex={-1}
               data-skipped={row.skippedReason !== null}
               data-duplicate={row.isDuplicate}
               data-strike={justStruck.has(index) ? 'draw' : undefined}
@@ -713,6 +791,8 @@ function PreviewStation({
                     type="button"
                     className="preview-rule-open"
                     aria-expanded={slipRow === index}
+                    // Every row carries the same words; the row's own description tells them apart.
+                    aria-label={`Ignore rows like this: ${row.description ?? 'this row'}`}
                     onClick={() => onOpenSlip(slipRow === index ? null : index)}
                   >
                     Ignore rows like this
@@ -754,12 +834,18 @@ function PreviewStation({
       </section>
 
       {result !== null ? (
-        <ImportedClose result={result} waiting={waiting} accountId={accountId} onStartOver={onStartOver} />
+        <ImportedClose
+          result={result}
+          waiting={waiting}
+          accountId={accountId}
+          accountName={accounts.find((a) => a.id === accountId)?.name ?? 'this account'}
+          onStartOver={onStartOver}
+        />
       ) : (
         <>
           {/* Entries, the way a ledger closes a figure. Every row that goes in arrives with no
               category, so all of them are for review until assignment rules can categorize a row. */}
-          <div className="exceptions" aria-live="polite">
+          <div className="exceptions">
             <div className="exception">
               <span className="exception-label">For review</span>
               <span className="exception-count num">{rows.willImportCount}</span>
@@ -773,6 +859,22 @@ function PreviewStation({
               <span className="exception-count num">{rows.duplicateCount}</span>
             </div>
           </div>
+
+          {/* The guess, made in the open: nothing has filed these rows, so they arrive with no
+              category and counted as a Want until a person says otherwise (ADR-0001). */}
+          {rows.willImportCount > 0 && (
+            <p className="close-note">
+              {rows.willImportCount === 1 ? 'It lands' : 'Each lands'} with no category, as a Want, until someone files{' '}
+              {rows.willImportCount === 1 ? 'it' : 'them'}.
+            </p>
+          )}
+
+          {/* One sentence for assistive technology, rather than three figures each announced alone
+              as a rule re-counts them. */}
+          <p className="visually-hidden" aria-live="polite">
+            {rows.willImportCount} for review, {rows.skippedCount} skipped by a rule, {rows.duplicateCount} already
+            imported.
+          </p>
 
           {/* Unreadable rows are named in the margin rather than given a count of their own: they
               are a problem to fix at the mapping, not a figure the household is being asked to trust. */}
@@ -837,40 +939,52 @@ function PreviewStation({
 
 /**
  * The same close, after the import: what was written and what was left out, then the work it made.
- * The memo is the handoff from import to the monthly ritual, and it does not print when there is
- * nothing to review.
+ * The review queue is the handoff from import to the monthly ritual, so it is the primary action
+ * here — and when nothing is waiting, it does not print at all.
  */
 function ImportedClose({
   result,
   waiting,
   accountId,
+  accountName,
   onStartOver,
 }: {
   result: ImportResult
   waiting: number
   accountId: number
+  accountName: string
   onStartOver: () => void
 }) {
+  // The result replaces the button that was just pressed, so focus moves to what it says.
+  const resultRef = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    resultRef.current?.focus()
+  }, [])
+
   return (
     <>
-      <p className="exceptions import-result" role="status">
+      <p className="exceptions import-result" role="status" tabIndex={-1} ref={resultRef}>
         Imported <span className="num">{result.imported}</span> · skipped{' '}
         <span className="num">{result.skippedIgnored}</span> by a rule · skipped{' '}
         <span className="num">{result.skippedDuplicate}</span> as duplicates
       </p>
 
+      {/* The account's whole queue, not just this file's rows: it is the list the action opens, and
+          rows an earlier import left unfiled are waiting in it too. */}
       {waiting > 0 && (
         <p className="memo">
-          {/* Scoped to the account the file belongs to, so the list it opens is the work this
-              import made rather than every account's queue at once. */}
-          <Link to={`/transactions?uncategorized=true&accountId=${accountId}`}>
-            {waiting} {waiting === 1 ? 'transaction is' : 'transactions are'} waiting for a category.
-          </Link>
+          <strong>{waiting}</strong> {waiting === 1 ? 'transaction' : 'transactions'} on {accountName}{' '}
+          {waiting === 1 ? 'is' : 'are'} waiting for a category.
         </p>
       )}
 
       <div className="step-actions">
-        <button type="button" className="secondary" onClick={onStartOver}>
+        {waiting > 0 && (
+          <Link className="button" to={`/transactions?uncategorized=true&accountId=${accountId}`}>
+            Review {waiting} {waiting === 1 ? 'transaction' : 'transactions'}
+          </Link>
+        )}
+        <button type="button" className={waiting > 0 ? 'secondary' : undefined} onClick={onStartOver}>
           Import another file
         </button>
       </div>

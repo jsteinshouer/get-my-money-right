@@ -70,12 +70,20 @@ test('importing a statement writes its rows uncategorized, and re-importing it s
   await page.getByRole('button', { name: 'Add rule' }).click()
   await expect(entry(page, 'AUTOPAY THANK YOU')).toContainText('Skipped · contains AUTOPAY')
   await expectTally(page, 3, 1, 0)
+  // The guess is said before it is made: nothing files these rows, so they arrive as Wants.
+  await expect(page.getByText('Each lands with no category, as a Want, until someone files them.')).toBeVisible()
+  // Focus returns to the row the rule was written from, now carrying its strike.
+  await expect(entry(page, 'AUTOPAY THANK YOU')).toBeFocused()
 
   // The button names what it will write, so there is nothing to reconcile and no dialog.
   await page.getByRole('button', { name: 'Import 3 rows' }).click()
 
   await expect(page.getByRole('status')).toHaveText('Imported 3 · skipped 1 by a rule · skipped 0 as duplicates')
-  await page.getByRole('link', { name: '3 transactions are waiting for a category.' }).click()
+  // Focus follows the import to what it says, rather than falling back to the top of the page.
+  await expect(page.getByRole('status')).toBeFocused()
+  await expect(page.getByRole('list', { name: 'Import steps' }).locator('[aria-current="step"]')).toHaveCount(0)
+  await expect(page.getByText(`3 transactions on ${accountName} are waiting for a category.`)).toBeVisible()
+  await page.getByRole('link', { name: 'Review 3 transactions' }).click()
 
   // The memo opens the review queue for this account: the three rows, filed nowhere, guessed Want.
   await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible()
@@ -101,7 +109,8 @@ test('importing a statement writes its rows uncategorized, and re-importing it s
   await page.getByRole('button', { name: 'Import 1 row' }).click()
   await expect(page.getByRole('status')).toHaveText('Imported 1 · skipped 0 by a rule · skipped 2 as duplicates')
   // The memo counts the account's whole queue — the list it opens — not just this file's rows.
-  await page.getByRole('link', { name: '4 transactions are waiting for a category.' }).click()
+  await expect(page.getByText(`4 transactions on ${accountName} are waiting for a category.`)).toBeVisible()
+  await page.getByRole('link', { name: 'Review 4 transactions' }).click()
 
   // Four in the queue now, not six: the overlap was not written twice.
   await expect(page.locator('tbody tr')).toHaveCount(4)

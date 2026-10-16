@@ -492,6 +492,8 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
 /* The correction mark a cash book makes against a line that is settled. */
 .station[data-state='done']::before {
   content: '\2713';
+  /* The mark is drawn for the eye; the band's own words say which station is settled. */
+  content: '\2713' / '';
   color: var(--signal);
   margin-right: var(--gap-2);
   letter-spacing: 0;
@@ -597,7 +599,29 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
   text-transform: uppercase;
   color: var(--ink-3);
   margin-bottom: var(--gap-3);
+  max-width: none;
 }
+
+/* The file's own name, as the household saved it: a name, not a label, so not set in caps. */
+.reading-file {
+  margin-left: var(--gap-3);
+  font-size: 0.8rem;
+  font-weight: 500;
+  font-stretch: 100%;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
+}
+
+/* The guess the tally is about to make, said once under it in the register of a note. */
+.close-note {
+  margin-top: var(--gap-2);
+  font-size: 0.86rem;
+  color: var(--ink-2);
+}
+
+/* An entry takes focus only when a rule written from it has just acted on it. */
+.preview-entry:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
 
 .reading-row {
   display: grid;
@@ -717,8 +741,9 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
 }
 
 /* The close after an import: the tally's frame (.exceptions), carrying one sentence of what was
-   written. */
+   written. As wide as the tally it replaces, so the close does not jump when the import lands. */
 .import-result {
+  max-width: none;
   padding: var(--gap-3) var(--gap-4);
   font-weight: 650;
   color: var(--ink);
