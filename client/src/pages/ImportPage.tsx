@@ -15,6 +15,7 @@ import {
   type Reading,
   type UploadPreview,
 } from '../api/import'
+import { transactionsApi } from '../api/transactions'
 import { IgnoreRuleForm } from '../components/IgnoreRuleForm'
 
 type Step = 'upload' | 'map' | 'preview'
@@ -88,6 +89,8 @@ export function ImportPage() {
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
+  /** The account's review queue after the import: the count the memo's link actually opens. */
+  const [waiting, setWaiting] = useState(0)
 
   useEffect(() => {
     accountsApi
@@ -337,7 +340,14 @@ export function ImportPage() {
         setImportError('The mapping could not be saved, so nothing was imported. Try again.')
         return
       }
-      setResult(await importApi.confirm(preview.token))
+      const outcome = await importApi.confirm(preview.token)
+      // Counted after the import rather than taken from it, so rows left unfiled by an earlier
+      // import of this account are in the figure too — they are in the list the memo opens.
+      const queue = await transactionsApi
+        .fetchAll({ accountId: preview.accountId, uncategorized: true })
+        .catch(() => null)
+      setWaiting(queue?.length ?? outcome.imported)
+      setResult(outcome)
       setSlipRow(null)
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'The import failed. Nothing was written.')
@@ -566,6 +576,7 @@ export function ImportPage() {
           importing={importing}
           importError={importError}
           result={result}
+          waiting={waiting}
           onOpenSlip={setSlipRow}
           onRuleSaved={handleRuleSaved}
           onImport={handleImport}
@@ -634,6 +645,7 @@ function PreviewStation({
   importing,
   importError,
   result,
+  waiting,
   onOpenSlip,
   onRuleSaved,
   onImport,
@@ -650,6 +662,7 @@ function PreviewStation({
   importing: boolean
   importError: string | null
   result: ImportResult | null
+  waiting: number
   onOpenSlip: (index: number | null) => void
   onRuleSaved: () => void
   onImport: () => void
@@ -741,11 +754,11 @@ function PreviewStation({
       </section>
 
       {result !== null ? (
-        <ImportedClose result={result} accountId={accountId} onStartOver={onStartOver} />
+        <ImportedClose result={result} waiting={waiting} accountId={accountId} onStartOver={onStartOver} />
       ) : (
         <>
           {/* Entries, the way a ledger closes a figure. Every row that goes in arrives with no
-              category, so all of them are for review until rules can classify a row. */}
+              category, so all of them are for review until assignment rules can categorize a row. */}
           <div className="exceptions" aria-live="polite">
             <div className="exception">
               <span className="exception-label">For review</span>
@@ -829,28 +842,29 @@ function PreviewStation({
  */
 function ImportedClose({
   result,
+  waiting,
   accountId,
   onStartOver,
 }: {
   result: ImportResult
+  waiting: number
   accountId: number
   onStartOver: () => void
 }) {
   return (
     <>
-      <p className="import-result" role="status">
+      <p className="exceptions import-result" role="status">
         Imported <span className="num">{result.imported}</span> · skipped{' '}
         <span className="num">{result.skippedIgnored}</span> by a rule · skipped{' '}
         <span className="num">{result.skippedDuplicate}</span> as duplicates
       </p>
 
-      {result.imported > 0 && (
+      {waiting > 0 && (
         <p className="memo">
           {/* Scoped to the account the file belongs to, so the list it opens is the work this
               import made rather than every account's queue at once. */}
           <Link to={`/transactions?uncategorized=true&accountId=${accountId}`}>
-            {result.imported} {result.imported === 1 ? 'transaction is' : 'transactions are'} waiting for a
-            category.
+            {waiting} {waiting === 1 ? 'transaction is' : 'transactions are'} waiting for a category.
           </Link>
         </p>
       )}

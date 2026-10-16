@@ -100,7 +100,8 @@ test('importing a statement writes its rows uncategorized, and re-importing it s
 
   await page.getByRole('button', { name: 'Import 1 row' }).click()
   await expect(page.getByRole('status')).toHaveText('Imported 1 · skipped 0 by a rule · skipped 2 as duplicates')
-  await page.getByRole('link', { name: '1 transaction is waiting for a category.' }).click()
+  // The memo counts the account's whole queue — the list it opens — not just this file's rows.
+  await page.getByRole('link', { name: '4 transactions are waiting for a category.' }).click()
 
   // Four in the queue now, not six: the overlap was not written twice.
   await expect(page.locator('tbody tr')).toHaveCount(4)

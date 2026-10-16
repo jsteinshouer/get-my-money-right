@@ -170,8 +170,7 @@ public class ReadAllRowsTests : IClassFixture<BudgetApiFactory>
     {
         var client = await LoggedInClientAsync(_factory);
         var accountId = await CreateAccountAsync(client, $"Duplicates {Guid.NewGuid():N}");
-        await SaveMappingAsync(client, accountId, new SaveMapping.Command(
-            "Posted Date", "Payee", "Amount", null, null, "MM/dd/yyyy", ",", true));
+        await SaveMappingAsync(client, accountId, SignedAmountMapping());
         var first = await UploadOkAsync(client, accountId, "signed-amount.csv");
         (await client.PostAsync($"/api/import/previews/{first.Token}/confirm", null)).EnsureSuccessStatusCode();
         var preview = await UploadOkAsync(client, accountId, "overlapping-export.csv");

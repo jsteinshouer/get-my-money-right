@@ -716,10 +716,9 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
   border-bottom-color: var(--signal);
 }
 
-/* The close after an import: the tally's frame, carrying one sentence of what was written. */
+/* The close after an import: the tally's frame (.exceptions), carrying one sentence of what was
+   written. */
 .import-result {
-  border: 1px solid var(--rule-strong);
-  background: var(--paper-field);
   padding: var(--gap-3) var(--gap-4);
   font-weight: 650;
   color: var(--ink);

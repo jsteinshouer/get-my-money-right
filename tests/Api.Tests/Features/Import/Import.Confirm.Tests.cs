@@ -238,9 +238,6 @@ public class ConfirmTests : IClassFixture<BudgetApiFactory>
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    private static SaveMapping.Command SignedAmountMapping() =>
-        new("Posted Date", "Payee", "Amount", null, null, "MM/dd/yyyy", ",", true);
-
     private static Task<HttpResponseMessage> ConfirmAsync(HttpClient client, string token) =>
         client.PostAsync($"/api/import/previews/{token}/confirm", null);
 
