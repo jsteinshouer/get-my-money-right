@@ -838,11 +838,12 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
     gap: var(--gap-1);
   }
 
-  .preview-line > .reading-date { grid-row: 1; }
-  .preview-line > .reading-description { grid-row: 2; }
-  .preview-line > .reading-amount { grid-row: 3; }
-  .preview-line > .preview-rule-open { grid-row: 4; }
-  .preview-line > * { grid-column: 1; }
+  /* Column and row together, per child: the desktop rules place each child by name, and a bare
+     `.preview-line > *` is too weak to move them back into the single column. */
+  .preview-line > .reading-date { grid-row: 1; grid-column: 1; }
+  .preview-line > .reading-description { grid-row: 2; grid-column: 1; }
+  .preview-line > .reading-amount { grid-row: 3; grid-column: 1; }
+  .preview-line > .preview-rule-open { grid-row: 4; grid-column: 1; }
 
   .preview-rule-open { justify-self: start; margin-top: var(--gap-2); }
   .preview-skip, .preview-problem { padding-left: 0; }

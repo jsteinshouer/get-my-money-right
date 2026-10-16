@@ -291,6 +291,15 @@ export function ImportPage() {
 
   const requirement = draft ? unmetRequirement(draft) : null
 
+  // The fifth import from the same bank: the mapping on screen is the one already saved, so the
+  // next step is to read the file, not to save what is saved. Import saves it again anyway.
+  const remembered =
+    preview !== null &&
+    draft !== null &&
+    preview.saved !== null &&
+    preview.missingColumns.length === 0 &&
+    sameMapping(draft, draftFrom(preview))
+
   async function handleSave(event: FormEvent) {
     event.preventDefault()
     setSaveError(null)
@@ -498,7 +507,7 @@ export function ImportPage() {
           {preview.saved && preview.missingColumns.length === 0 && (
             <p className="note">
               Remembered from the last import for <strong>{selectedAccount?.name ?? 'this account'}</strong>,{' '}
-              {readableTimestamp(preview.saved.updatedAt)}. Check it still reads correctly, then save.
+              {readableTimestamp(preview.saved.updatedAt)}. Check it still reads correctly, then preview every row.
             </p>
           )}
 
@@ -584,12 +593,24 @@ export function ImportPage() {
           )}
 
           <div className="step-actions">
-            <button type="submit" disabled={saving} aria-busy={saving || undefined}>
+            {remembered && (
+              <button type="button" onClick={goToPreview}>
+                Preview all rows
+              </button>
+            )}
+            <button
+              type="submit"
+              className={remembered ? 'secondary' : undefined}
+              disabled={saving}
+              aria-busy={saving || undefined}
+            >
               {saving ? 'Saving…' : 'Save mapping'}
             </button>
-            <button type="button" className="secondary" onClick={goToPreview}>
-              Preview all rows
-            </button>
+            {!remembered && (
+              <button type="button" className="secondary" onClick={goToPreview}>
+                Preview all rows
+              </button>
+            )}
             <button type="button" className="secondary" onClick={startOver}>
               Choose another file
             </button>
@@ -1021,6 +1042,15 @@ function draftFrom(preview: UploadPreview): MappingDraft {
     debitColumn: present(saved.debitColumn),
     creditColumn: present(saved.creditColumn),
   }
+}
+
+function sameMapping(a: MappingDraft, b: MappingDraft): boolean {
+  return (
+    a.delimiter === b.delimiter &&
+    a.hasHeaderRow === b.hasHeaderRow &&
+    a.dateFormat === b.dateFormat &&
+    ROLE_KEYS.every((key) => a[key] === b[key])
+  )
 }
 
 /** The first thing still missing before the mapping can be saved, named as an instruction. */
