@@ -1,24 +1,49 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { accountsApi, type Account } from '../api/accounts'
-import { importApi, matchTypeLabel, type IgnoreRule } from '../api/import'
+import { categoriesApi, type Category } from '../api/categories'
+import { ApiError } from '../api/client'
+import {
+  describeAssignments,
+  importApi,
+  matchTypeLabel,
+  type AssignmentRule,
+  type IgnoreRule,
+} from '../api/import'
+import { tagsApi, type Tag } from '../api/tags'
+import { AssignmentRuleForm } from '../components/AssignmentRuleForm'
 import { IgnoreRuleForm } from '../components/IgnoreRuleForm'
 
+/** The rule awaiting a delete confirmation, and which kind it is. */
+type Confirming = { kind: 'assign'; rule: AssignmentRule } | { kind: 'ignore'; rule: IgnoreRule }
+
 /**
- * The ledger of ignore rules. Rules are normally born from the preview row that provoked them; this
- * page is where they are read back and struck out. There is no active/inactive switch — deleting a
- * rule is how it is turned off, so the whole list is rules that are in force right now.
+ * The import rules, both kinds on one page: what an import does to your rows, answered in one
+ * place. Classify first, skip second — the household writes far more of the first. There is no
+ * edit and no active/inactive switch: deleting a rule is how it is turned off or changed, so every
+ * rule listed is in force right now.
  */
 export function IgnoreRulesPage() {
-  const [rules, setRules] = useState<IgnoreRule[] | null>(null)
+  const [assignmentRules, setAssignmentRules] = useState<AssignmentRule[] | null>(null)
+  const [ignoreRules, setIgnoreRules] = useState<IgnoreRule[] | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [tags, setTags] = useState<Tag[]>([])
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [confirming, setConfirming] = useState<IgnoreRule | null>(null)
+  const [confirming, setConfirming] = useState<Confirming | null>(null)
 
-  const load = useCallback(async () => {
+  const loadAssignmentRules = useCallback(async () => {
     try {
-      setRules(await importApi.fetchIgnoreRules())
+      setAssignmentRules(await importApi.fetchAssignmentRules())
+    } catch {
+      setError('Failed to load the assignment rules.')
+    }
+  }, [])
+
+  const loadIgnoreRules = useCallback(async () => {
+    try {
+      setIgnoreRules(await importApi.fetchIgnoreRules())
     } catch {
       setError('Failed to load the ignore rules.')
     }
@@ -32,19 +57,64 @@ export function IgnoreRulesPage() {
     }
   }, [])
 
-  useEffect(() => {
-    void load()
-    void loadAccounts()
-  }, [load, loadAccounts])
+  const loadCategories = useCallback(async () => {
+    try {
+      setCategories(await categoriesApi.fetchAll())
+    } catch {
+      setError('Failed to load categories.')
+    }
+  }, [])
 
-  async function handleDelete(rule: IgnoreRule) {
+  const loadTags = useCallback(async () => {
+    try {
+      setTags(await tagsApi.fetchAll())
+    } catch {
+      setError('Failed to load tags.')
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadAssignmentRules()
+    void loadIgnoreRules()
+    void loadAccounts()
+    void loadCategories()
+    void loadTags()
+  }, [loadAssignmentRules, loadIgnoreRules, loadAccounts, loadCategories, loadTags])
+
+  async function createTag(name: string): Promise<Tag | null> {
+    setError(null)
+    try {
+      const created = await tagsApi.create(name)
+      await loadTags()
+      return created
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.status === 409
+          ? `A tag called “${name}” already exists.`
+          : 'Failed to create the tag.',
+      )
+      return null
+    }
+  }
+
+  async function handleDelete(target: Confirming) {
     setError(null)
     setNotice(null)
     setConfirming(null)
     try {
-      await importApi.deleteIgnoreRule(rule.id)
-      setNotice(`Deleted the rule for rows whose description ${describe(rule)}. Rows it was catching will import.`)
-      await load()
+      if (target.kind === 'assign') {
+        await importApi.deleteAssignmentRule(target.rule.id)
+        setNotice(
+          `Deleted the rule for rows whose description ${describe(target.rule)}. Transactions already in the ledger keep what they have.`,
+        )
+        await loadAssignmentRules()
+      } else {
+        await importApi.deleteIgnoreRule(target.rule.id)
+        setNotice(
+          `Deleted the rule for rows whose description ${describe(target.rule)}. Rows it was catching will import.`,
+        )
+        await loadIgnoreRules()
+      }
     } catch {
       setError('Failed to delete the rule.')
     }
@@ -53,10 +123,11 @@ export function IgnoreRulesPage() {
   return (
     <>
       <hgroup>
-        <h1>Ignore rules</h1>
+        <h1>Import rules</h1>
         <p>
-          Rows whose description matches a rule are struck out in an import preview and never reach the
-          transaction list — recurring noise, and the transfer between your own accounts.
+          How an import reads your rows. Matching ignores capitalisation and reads the description exactly as
+          the preview prints it. A rule affects future imports only — it never changes a transaction already in
+          the ledger.
         </p>
       </hgroup>
 
@@ -70,9 +141,11 @@ export function IgnoreRulesPage() {
       {confirming !== null && (
         <div className="confirm" role="alertdialog" aria-labelledby="confirm-delete-rule">
           <p id="confirm-delete-rule">
-            Delete the rule for rows whose description <strong>{describe(confirming)}</strong>
-            {confirming.accountName === null ? ' on any account' : ` on ${confirming.accountName}`}? Rows it was
-            catching will import from now on.
+            Delete the rule {confirming.kind === 'assign' ? 'that classifies' : 'for'} rows whose description{' '}
+            <strong>{describe(confirming.rule)}</strong> {scope(confirming.rule)}?{' '}
+            {confirming.kind === 'assign'
+              ? 'Future imports will no longer classify rows by it.'
+              : 'Rows it was catching will import from now on.'}
           </p>
           <div className="confirm-actions">
             <button className="contrast" onClick={() => void handleDelete(confirming)}>
@@ -85,66 +158,132 @@ export function IgnoreRulesPage() {
         </div>
       )}
 
-      <article>
-        <hgroup>
-          <h2>Add a rule</h2>
-          <p>Matching ignores capitalisation, and reads the description exactly as the preview prints it.</p>
-        </hgroup>
-        <IgnoreRuleForm
-          accounts={accounts}
-          submitLabel="Add rule"
-          clearAfterSave
-          onSaved={(rule) => {
-            setError(null)
-            setNotice(
-              `Added a rule for rows whose description ${describe(rule)}${
-                rule.accountName === null ? ' on any account' : ` on ${rule.accountName}`
-              }.`,
-            )
-            void load()
-          }}
-        />
-      </article>
+      <section aria-labelledby="classify-rules-head">
+        <div className="section-head">
+          <h2 id="classify-rules-head">Rules that classify a row</h2>
+        </div>
 
-      {rules === null ? (
-        <p aria-busy="true">Loading…</p>
-      ) : rules.length === 0 ? (
-        <div className="empty">
-          <h3>No ignore rules yet</h3>
-          <p>Add one above, or from a row in an import preview — which is where you usually spot the noise.</p>
-          <Link className="button" to="/import">
-            Go to import
-          </Link>
-        </div>
-      ) : (
-        <div className="table-scroll">
-          <table>
-            <caption className="visually-hidden">Ignore rules, those applying to every account first</caption>
-            <thead>
-              <tr>
-                <th scope="col">Match</th>
-                <th scope="col">Scope</th>
-                <th scope="col">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rules.map((rule) => (
-                <tr key={rule.id}>
-                  <td>
-                    {matchTypeLabel(rule.matchType)} <strong>{rule.matchText}</strong>
-                  </td>
-                  <td>{rule.accountName ?? 'All accounts'}</td>
-                  <td>
-                    <button className="contrast" onClick={() => setConfirming(rule)}>
-                      Delete
-                    </button>
-                  </td>
+        <article>
+          <AssignmentRuleForm
+            accounts={accounts}
+            categories={categories}
+            tags={tags}
+            onCreateTag={createTag}
+            onSaved={(rule) => {
+              setError(null)
+              setNotice(
+                `Added a rule: rows whose description ${describe(rule)} ${scope(rule)} are ${describeAssignments(rule)}.`,
+              )
+              void loadAssignmentRules()
+            }}
+          />
+        </article>
+
+        {assignmentRules === null ? (
+          <p aria-busy="true">Loading…</p>
+        ) : assignmentRules.length === 0 ? (
+          <div className="empty">
+            <p>No rules yet. Write one from a row in an import preview.</p>
+          </div>
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <caption className="visually-hidden">
+                Rules that classify a row, those applying to every account first
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Match</th>
+                  <th scope="col">Assigns</th>
+                  <th scope="col">Scope</th>
+                  <th scope="col">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {assignmentRules.map((rule) => (
+                  <tr key={rule.id}>
+                    <td>
+                      {matchTypeLabel(rule.matchType)} <strong>{rule.matchText}</strong>
+                    </td>
+                    <td>{describeAssignments(rule)}</td>
+                    <td>{rule.accountName ?? 'All accounts'}</td>
+                    <td>
+                      <button className="contrast" onClick={() => setConfirming({ kind: 'assign', rule })}>
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section aria-labelledby="skip-rules-head">
+        <div className="section-head">
+          <h2 id="skip-rules-head">Rules that skip a row</h2>
         </div>
-      )}
+        <p className="memo">
+          Rows whose description matches a rule are struck out in an import preview and never reach the
+          transaction list — recurring noise, and the transfer between your own accounts.
+        </p>
+
+        <article>
+          <IgnoreRuleForm
+            accounts={accounts}
+            submitLabel="Add rule"
+            clearAfterSave
+            onSaved={(rule) => {
+              setError(null)
+              setNotice(
+                `Added a rule for rows whose description ${describe(rule)} ${scope(rule)}.`,
+              )
+              void loadIgnoreRules()
+            }}
+          />
+        </article>
+
+        {ignoreRules === null ? (
+          <p aria-busy="true">Loading…</p>
+        ) : ignoreRules.length === 0 ? (
+          <div className="empty">
+            <h3>No ignore rules yet</h3>
+            <p>Add one above, or from a row in an import preview — which is where you usually spot the noise.</p>
+            <Link className="button" to="/import">
+              Go to import
+            </Link>
+          </div>
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <caption className="visually-hidden">Rules that skip a row, those applying to every account first</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Match</th>
+                  <th scope="col">Scope</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ignoreRules.map((rule) => (
+                  <tr key={rule.id}>
+                    <td>
+                      {matchTypeLabel(rule.matchType)} <strong>{rule.matchText}</strong>
+                    </td>
+                    <td>{rule.accountName ?? 'All accounts'}</td>
+                    <td>
+                      <button className="contrast" onClick={() => setConfirming({ kind: 'ignore', rule })}>
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <p className="memo">
         Back to <Link to="/import">Import</Link>. A rule takes effect the next time a preview is read, so a
@@ -154,6 +293,11 @@ export function IgnoreRulesPage() {
   )
 }
 
-function describe(rule: IgnoreRule): string {
+function describe(rule: IgnoreRule | AssignmentRule): string {
   return `${matchTypeLabel(rule.matchType)} "${rule.matchText}"`
+}
+
+/** Where a rule applies, as the sentences on this page say it. */
+function scope(rule: IgnoreRule | AssignmentRule): string {
+  return rule.accountName === null ? 'on any account' : `on ${rule.accountName}`
 }

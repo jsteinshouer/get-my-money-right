@@ -37,7 +37,7 @@ const ALL_NOISE_CSV = [
 /** Upload the file, give the columns their roles, and carry on to station 3. */
 async function previewCsv(page: Page, accountName: string, csv: string = NOISY_CSV) {
   await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Import' }).click()
-  await expect(page.getByRole('heading', { name: 'Import' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Import', exact: true })).toBeVisible()
   await page.getByLabel('Account').selectOption({ label: accountName })
   await page
     .getByLabel('CSV file')
@@ -72,22 +72,24 @@ test('a rule written on the rules page strikes the matching row in the preview',
   // The rules page is reached from the Import page, not from the masthead.
   await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Import' }).click()
   await page.getByRole('link', { name: 'ignore rule' }).click()
-  await expect(page.getByRole('heading', { name: 'Ignore rules' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Import rules' })).toBeVisible()
 
-  await page.getByLabel('Match').selectOption('Contains')
-  await page.getByLabel('These words').fill('AUTOPAY')
-  await page.getByLabel('For').selectOption({ label: accountName })
-  await page.getByRole('button', { name: 'Add rule' }).click()
+  // The page holds both kinds of rule; ignore rules are written in the section that skips rows.
+  const skip = page.getByRole('region', { name: 'Rules that skip a row' })
+  await skip.getByLabel('Match').selectOption('Contains')
+  await skip.getByLabel('These words').fill('AUTOPAY')
+  await skip.getByLabel('For').selectOption({ label: accountName })
+  await skip.getByRole('button', { name: 'Add rule' }).click()
 
   const ruleRow = page.getByRole('row').filter({ hasText: 'AUTOPAY' }).filter({ hasText: accountName })
   await expect(ruleRow).toBeVisible()
 
   // Same words, same kind of match, same scope is the same rule — refused at the field, not in a
   // dialog, and the form keeps what was typed.
-  await page.getByLabel('These words').fill('AUTOPAY')
-  await page.getByLabel('For').selectOption({ label: accountName })
-  await page.getByRole('button', { name: 'Add rule' }).click()
-  await expect(page.locator('.field-error')).toContainText('That rule is already written')
+  await skip.getByLabel('These words').fill('AUTOPAY')
+  await skip.getByLabel('For').selectOption({ label: accountName })
+  await skip.getByRole('button', { name: 'Add rule' }).click()
+  await expect(skip.locator('.field-error')).toContainText('That rule is already written')
   await expect(page.getByRole('row').filter({ hasText: 'AUTOPAY' }).filter({ hasText: accountName })).toHaveCount(1)
 
   await previewCsv(page, accountName)
@@ -148,7 +150,7 @@ test('deleting a rule un-strikes the rows it was catching', async ({ page }) => 
   await expectTally(page, 4, 1)
 
   await page.getByRole('link', { name: 'ignore rules' }).first().click()
-  await expect(page.getByRole('heading', { name: 'Ignore rules' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Import rules' })).toBeVisible()
 
   const ruleRow = page.getByRole('row').filter({ hasText: 'SHELL OIL' }).filter({ hasText: accountName })
   await ruleRow.getByRole('button', { name: 'Delete' }).click()

@@ -61,7 +61,7 @@ public static partial class Import
             foreach (var record in records)
             {
                 var read = RowReader.ReadRow(record, columns, mapping);
-                var caughtBy = IgnoreMatching.FirstMatch(rules, read.Description);
+                var caughtBy = RuleMatching.FirstMatch(rules, read.Description);
 
                 if (caughtBy is not null)
                 {

@@ -25,7 +25,16 @@ public static partial class Tags
                 }
 
                 // A tag is a label, not a classification the ledger depends on, so deleting one
-                // detaches it from its transactions rather than being blocked by them.
+                // detaches it from its transactions and its assignment rules rather than being
+                // blocked by them. A rule this tag was the only thing in has nothing left to set,
+                // and could no longer be read back as a sentence, so it goes with the tag.
+                var emptiedRules = await _db.ImportAssignmentRules
+                    .Where(r => r.CategoryId == null && r.NeedWant == null)
+                    .Where(r => _db.ImportAssignmentRuleTags.Any(rt => rt.RuleId == r.Id && rt.TagId == id))
+                    .Where(r => !_db.ImportAssignmentRuleTags.Any(rt => rt.RuleId == r.Id && rt.TagId != id))
+                    .ToListAsync(cancellationToken);
+
+                _db.ImportAssignmentRules.RemoveRange(emptiedRules);
                 _db.Tags.Remove(tag);
                 await _db.SaveChangesAsync(cancellationToken);
                 return true;
