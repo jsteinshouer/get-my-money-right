@@ -25,7 +25,7 @@ type Confirming = { kind: 'assign'; rule: AssignmentRule } | { kind: 'ignore'; r
  */
 export function IgnoreRulesPage() {
   const [assignmentRules, setAssignmentRules] = useState<AssignmentRule[] | null>(null)
-  const [rules, setRules] = useState<IgnoreRule[] | null>(null)
+  const [ignoreRules, setIgnoreRules] = useState<IgnoreRule[] | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [tags, setTags] = useState<Tag[]>([])
@@ -41,9 +41,9 @@ export function IgnoreRulesPage() {
     }
   }, [])
 
-  const load = useCallback(async () => {
+  const loadIgnoreRules = useCallback(async () => {
     try {
-      setRules(await importApi.fetchIgnoreRules())
+      setIgnoreRules(await importApi.fetchIgnoreRules())
     } catch {
       setError('Failed to load the ignore rules.')
     }
@@ -75,11 +75,11 @@ export function IgnoreRulesPage() {
 
   useEffect(() => {
     void loadAssignmentRules()
-    void load()
+    void loadIgnoreRules()
     void loadAccounts()
     void loadCategories()
     void loadTags()
-  }, [loadAssignmentRules, load, loadAccounts, loadCategories, loadTags])
+  }, [loadAssignmentRules, loadIgnoreRules, loadAccounts, loadCategories, loadTags])
 
   async function createTag(name: string): Promise<Tag | null> {
     setError(null)
@@ -113,7 +113,7 @@ export function IgnoreRulesPage() {
         setNotice(
           `Deleted the rule for rows whose description ${describe(target.rule)}. Rows it was catching will import.`,
         )
-        await load()
+        await loadIgnoreRules()
       }
     } catch {
       setError('Failed to delete the rule.')
@@ -142,8 +142,7 @@ export function IgnoreRulesPage() {
         <div className="confirm" role="alertdialog" aria-labelledby="confirm-delete-rule">
           <p id="confirm-delete-rule">
             Delete the rule {confirming.kind === 'assign' ? 'that classifies' : 'for'} rows whose description{' '}
-            <strong>{describe(confirming.rule)}</strong>
-            {confirming.rule.accountName === null ? ' on any account' : ` on ${confirming.rule.accountName}`}?{' '}
+            <strong>{describe(confirming.rule)}</strong> {scope(confirming.rule)}?{' '}
             {confirming.kind === 'assign'
               ? 'Future imports will no longer classify rows by it.'
               : 'Rows it was catching will import from now on.'}
@@ -173,9 +172,7 @@ export function IgnoreRulesPage() {
             onSaved={(rule) => {
               setError(null)
               setNotice(
-                `Added a rule: rows whose description ${describe(rule)}${
-                  rule.accountName === null ? ' on any account' : ` on ${rule.accountName}`
-                } are ${describeAssignments(rule)}.`,
+                `Added a rule: rows whose description ${describe(rule)} ${scope(rule)} are ${describeAssignments(rule)}.`,
               )
               void loadAssignmentRules()
             }}
@@ -227,6 +224,10 @@ export function IgnoreRulesPage() {
         <div className="section-head">
           <h2 id="skip-rules-head">Rules that skip a row</h2>
         </div>
+        <p className="memo">
+          Rows whose description matches a rule are struck out in an import preview and never reach the
+          transaction list — recurring noise, and the transfer between your own accounts.
+        </p>
 
         <article>
           <IgnoreRuleForm
@@ -236,18 +237,16 @@ export function IgnoreRulesPage() {
             onSaved={(rule) => {
               setError(null)
               setNotice(
-                `Added a rule for rows whose description ${describe(rule)}${
-                  rule.accountName === null ? ' on any account' : ` on ${rule.accountName}`
-                }.`,
+                `Added a rule for rows whose description ${describe(rule)} ${scope(rule)}.`,
               )
-              void load()
+              void loadIgnoreRules()
             }}
           />
         </article>
 
-        {rules === null ? (
+        {ignoreRules === null ? (
           <p aria-busy="true">Loading…</p>
-        ) : rules.length === 0 ? (
+        ) : ignoreRules.length === 0 ? (
           <div className="empty">
             <h3>No ignore rules yet</h3>
             <p>Add one above, or from a row in an import preview — which is where you usually spot the noise.</p>
@@ -267,7 +266,7 @@ export function IgnoreRulesPage() {
                 </tr>
               </thead>
               <tbody>
-                {rules.map((rule) => (
+                {ignoreRules.map((rule) => (
                   <tr key={rule.id}>
                     <td>
                       {matchTypeLabel(rule.matchType)} <strong>{rule.matchText}</strong>
@@ -296,4 +295,9 @@ export function IgnoreRulesPage() {
 
 function describe(rule: IgnoreRule | AssignmentRule): string {
   return `${matchTypeLabel(rule.matchType)} "${rule.matchText}"`
+}
+
+/** Where a rule applies, as the sentences on this page say it. */
+function scope(rule: IgnoreRule | AssignmentRule): string {
+  return rule.accountName === null ? 'on any account' : `on ${rule.accountName}`
 }

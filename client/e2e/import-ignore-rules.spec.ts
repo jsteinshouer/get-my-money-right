@@ -37,7 +37,7 @@ const ALL_NOISE_CSV = [
 /** Upload the file, give the columns their roles, and carry on to station 3. */
 async function previewCsv(page: Page, accountName: string, csv: string = NOISY_CSV) {
   await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Import' }).click()
-  await expect(page.getByRole('heading', { name: 'Import' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Import', exact: true })).toBeVisible()
   await page.getByLabel('Account').selectOption({ label: accountName })
   await page
     .getByLabel('CSV file')

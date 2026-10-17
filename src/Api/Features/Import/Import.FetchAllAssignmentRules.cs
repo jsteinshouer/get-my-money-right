@@ -7,7 +7,7 @@ namespace Api.Features.Import;
 public static partial class Import
 {
     /// <summary>
-    /// Every assignment rule, in the order the skip rules are read: what applies everywhere first,
+    /// Every assignment rule, in the order the ignore rules are read: what applies everywhere first,
     /// then each account's own. Each carries the names of what it assigns, so it can be read back as
     /// a sentence without a second trip for categories and tags.
     /// </summary>
