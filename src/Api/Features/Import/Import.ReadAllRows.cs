@@ -86,7 +86,7 @@ public static partial class Import
                         r.Description,
                         r.Amount,
                         r.Error,
-                        r.CaughtBy is null ? null : IgnoreMatching.Describe(r.CaughtBy),
+                        r.CaughtBy is null ? null : RuleMatching.Describe(r.CaughtBy),
                         r.Outcome == Pipeline.Outcome.Duplicate))
                     .ToList();
 

@@ -23,6 +23,8 @@ public class BudgetDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Tags.TransactionTag> TransactionTags => Set<Tags.TransactionTag>();
     public DbSet<Import.CsvImportMapping> CsvImportMappings => Set<Import.CsvImportMapping>();
     public DbSet<Import.ImportIgnoreRule> ImportIgnoreRules => Set<Import.ImportIgnoreRule>();
+    public DbSet<Import.ImportAssignmentRule> ImportAssignmentRules => Set<Import.ImportAssignmentRule>();
+    public DbSet<Import.ImportAssignmentRuleTag> ImportAssignmentRuleTags => Set<Import.ImportAssignmentRuleTag>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -166,5 +168,57 @@ public class BudgetDbContext : IdentityDbContext<ApplicationUser>
             .WithMany()
             .HasForeignKey(r => r.CreatedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // The assignment rule refuses a duplicate the same way the ignore rule does: same words,
+        // same kind of match, same scope, compared without case, with the filtered pair closing
+        // SQLite's NULLs-are-distinct gap for global rules.
+        builder.Entity<Import.ImportAssignmentRule>()
+            .Property(r => r.MatchText)
+            .UseCollation("NOCASE");
+
+        builder.Entity<Import.ImportAssignmentRule>()
+            .HasIndex(r => new { r.AccountId, r.MatchText, r.MatchType })
+            .IsUnique();
+
+        builder.Entity<Import.ImportAssignmentRule>()
+            .HasIndex(r => new { r.MatchText, r.MatchType })
+            .IsUnique()
+            .HasFilter("\"AccountId\" IS NULL");
+
+        builder.Entity<Import.ImportAssignmentRule>()
+            .HasOne<Accounts.Account>()
+            .WithMany()
+            .HasForeignKey(r => r.AccountId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // A rule pointing at a vanished category would silently stop classifying, so the category
+        // is protected by its rules exactly as it is by its transactions.
+        builder.Entity<Import.ImportAssignmentRule>()
+            .HasOne<Categories.Category>()
+            .WithMany()
+            .HasForeignKey(r => r.CategoryId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Import.ImportAssignmentRule>()
+            .HasOne<ApplicationUser>()
+            .WithMany()
+            .HasForeignKey(r => r.CreatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Import.ImportAssignmentRuleTag>()
+            .HasKey(rt => new { rt.RuleId, rt.TagId });
+
+        // A tag is a label, not something a rule depends on: deleting one drops it from its rules.
+        builder.Entity<Import.ImportAssignmentRuleTag>()
+            .HasOne<Import.ImportAssignmentRule>()
+            .WithMany()
+            .HasForeignKey(rt => rt.RuleId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<Import.ImportAssignmentRuleTag>()
+            .HasOne<Tags.Tag>()
+            .WithMany()
+            .HasForeignKey(rt => rt.TagId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

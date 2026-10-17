@@ -43,7 +43,12 @@ export function CategoriesPage() {
       await categoriesApi.delete(id)
       await load()
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
+      const ruleCount = err instanceof ApiError ? err.problem?.ruleCount : undefined
+      if (err instanceof ApiError && err.status === 409 && typeof ruleCount === 'number') {
+        setError(
+          `This category is used by ${ruleCount} assignment ${ruleCount === 1 ? 'rule' : 'rules'} and cannot be deleted.`,
+        )
+      } else if (err instanceof ApiError && err.status === 409) {
         setError('This category still has transactions attached and cannot be deleted.')
       } else {
         setError('Failed to delete the category.')

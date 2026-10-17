@@ -217,6 +217,67 @@ namespace Api.Migrations
                     b.ToTable("CsvImportMappings");
                 });
 
+            modelBuilder.Entity("Api.Features.Import.Import+ImportAssignmentRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("AccountId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("CategoryId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CreatedByUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MatchText")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<int>("MatchType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("NeedWant")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("MatchText", "MatchType")
+                        .IsUnique()
+                        .HasFilter("\"AccountId\" IS NULL");
+
+                    b.HasIndex("AccountId", "MatchText", "MatchType")
+                        .IsUnique();
+
+                    b.ToTable("ImportAssignmentRules");
+                });
+
+            modelBuilder.Entity("Api.Features.Import.Import+ImportAssignmentRuleTag", b =>
+                {
+                    b.Property<int>("RuleId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TagId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("RuleId", "TagId");
+
+                    b.HasIndex("TagId");
+
+                    b.ToTable("ImportAssignmentRuleTags");
+                });
+
             modelBuilder.Entity("Api.Features.Import.Import+ImportIgnoreRule", b =>
                 {
                     b.Property<int>("Id")
@@ -502,6 +563,40 @@ namespace Api.Migrations
                         .WithMany()
                         .HasForeignKey("CreatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Api.Features.Import.Import+ImportAssignmentRule", b =>
+                {
+                    b.HasOne("Api.Features.Accounts.Accounts+Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Api.Features.Categories.Categories+Category", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Api.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Api.Features.Import.Import+ImportAssignmentRuleTag", b =>
+                {
+                    b.HasOne("Api.Features.Import.Import+ImportAssignmentRule", null)
+                        .WithMany()
+                        .HasForeignKey("RuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Api.Features.Tags.Tags+Tag", null)
+                        .WithMany()
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

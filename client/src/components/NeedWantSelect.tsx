@@ -7,6 +7,7 @@ export function NeedWantSelect({
   onChange,
   includeAllOption = false,
   required = false,
+  placeholder = 'Select…',
 }: {
   id?: string
   label?: string
@@ -14,6 +15,8 @@ export function NeedWantSelect({
   onChange: (value: NeedWant | '') => void
   includeAllOption?: boolean
   required?: boolean
+  /** What the empty choice reads as, when there is no "all" option to show instead. */
+  placeholder?: string
 }) {
   return (
     <select
@@ -24,7 +27,7 @@ export function NeedWantSelect({
       onChange={(e) => onChange(e.target.value as NeedWant | '')}
     >
       <option value="" disabled={required && !includeAllOption}>
-        {includeAllOption ? 'All' : 'Select…'}
+        {includeAllOption ? 'All' : placeholder}
       </option>
       {needWants.map((needWant) => (
         <option key={needWant} value={needWant}>

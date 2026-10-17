@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using Api.Tests.Fixtures;
 using static Api.Features.Accounts.Accounts;
 using static Api.Features.Import.Import;
+using CategoriesFeature = Api.Features.Categories.Categories;
+using TagsFeature = Api.Features.Tags.Tags;
 
 namespace Api.Tests.Features.Import;
 
@@ -56,6 +58,32 @@ public static class ImportTestHelpers
         var response = await PostIgnoreRuleAsync(client, accountId, matchText, matchType);
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<CreateIgnoreRule.Response>(TestClientExtensions.JsonOptions))!;
+    }
+
+    public static Task<HttpResponseMessage> PostAssignmentRuleAsync(
+        HttpClient client, CreateAssignmentRule.Command command) =>
+        client.PostAsJsonAsync("/api/import/assignment-rules", command, TestClientExtensions.JsonOptions);
+
+    public static async Task<CreateAssignmentRule.Response> CreateAssignmentRuleAsync(
+        HttpClient client, CreateAssignmentRule.Command command)
+    {
+        var response = await PostAssignmentRuleAsync(client, command);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<CreateAssignmentRule.Response>(TestClientExtensions.JsonOptions))!;
+    }
+
+    public static async Task<int> CreateCategoryAsync(HttpClient client, string name)
+    {
+        var response = await client.PostAsJsonAsync("/api/categories", new CategoriesFeature.Create.Command(name));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<CategoriesFeature.Create.Response>())!.Id;
+    }
+
+    public static async Task<int> CreateTagAsync(HttpClient client, string name)
+    {
+        var response = await client.PostAsJsonAsync("/api/tags", new TagsFeature.Create.Command(name));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<TagsFeature.Create.Response>())!.Id;
     }
 
     /// <summary>How signed-amount.csv and its siblings name their columns.</summary>

@@ -1,4 +1,5 @@
 using SharpGrip.FluentValidation.AutoValidation.Endpoints.Extensions;
+using static Api.Features.Transactions.Transactions;
 
 namespace Api.Features.Import;
 
@@ -26,7 +27,10 @@ public static partial class Import
         public DateTimeOffset UpdatedAt { get; set; }
     }
 
-    /// <summary>How a rule's text is held up against a row's description.</summary>
+    /// <summary>
+    /// How a rule's text is held up against a row's description. Named for the ignore rule, which
+    /// came first; the assignment rule speaks the same vocabulary so both kinds match alike.
+    /// </summary>
     public enum IgnoreMatchType
     {
         Contains,
@@ -40,7 +44,7 @@ public static partial class Import
     /// app has no Transfer entity — so the mechanism carries a modelling decision on its back.
     /// <see cref="AccountId"/> is null for a rule that applies to every account.
     /// </summary>
-    public class ImportIgnoreRule
+    public class ImportIgnoreRule : IImportRule
     {
         public int Id { get; set; }
         public int? AccountId { get; set; }
@@ -48,6 +52,34 @@ public static partial class Import
         public IgnoreMatchType MatchType { get; set; }
         public bool IsActive { get; set; } = true;
         public required string CreatedByUserId { get; set; }
+    }
+
+    /// <summary>
+    /// A row the household has said what it *is*: "rows whose description contains KROGER are
+    /// Groceries · Need". Sets any mix of <see cref="CategoryId"/>, <see cref="NeedWant"/> and tags —
+    /// never none, since a rule that sets nothing cannot be read back as a sentence. Scoped like an
+    /// ignore rule: <see cref="AccountId"/> is null for a rule that applies to every account.
+    /// </summary>
+    public class ImportAssignmentRule : IImportRule
+    {
+        public int Id { get; set; }
+        public int? AccountId { get; set; }
+        public required string MatchText { get; set; }
+        public IgnoreMatchType MatchType { get; set; }
+        public int? CategoryId { get; set; }
+        public NeedWant? NeedWant { get; set; }
+        public bool IsActive { get; set; } = true;
+        public required string CreatedByUserId { get; set; }
+    }
+
+    /// <summary>
+    /// The many-to-many join between an assignment rule and the tags it applies. Owned by the
+    /// pairing: deleting the tag or the rule takes the row with it, as a tag on a transaction does.
+    /// </summary>
+    public class ImportAssignmentRuleTag
+    {
+        public int RuleId { get; set; }
+        public int TagId { get; set; }
     }
 
     public static IServiceCollection AddImportFeature(this IServiceCollection services) => services
@@ -61,7 +93,10 @@ public static partial class Import
         .AddFetchMapping()
         .AddCreateIgnoreRule()
         .AddFetchAllIgnoreRules()
-        .AddDeleteIgnoreRule();
+        .AddDeleteIgnoreRule()
+        .AddCreateAssignmentRule()
+        .AddFetchAllAssignmentRules()
+        .AddDeleteAssignmentRule();
 
     public static IEndpointRouteBuilder MapImportFeature(this IEndpointRouteBuilder endpoints)
     {
@@ -78,7 +113,10 @@ public static partial class Import
             .MapFetchMapping()
             .MapCreateIgnoreRule()
             .MapFetchAllIgnoreRules()
-            .MapDeleteIgnoreRule();
+            .MapDeleteIgnoreRule()
+            .MapCreateAssignmentRule()
+            .MapFetchAllAssignmentRules()
+            .MapDeleteAssignmentRule();
         return endpoints;
     }
 }
