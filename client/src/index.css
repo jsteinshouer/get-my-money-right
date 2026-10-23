@@ -393,9 +393,9 @@ td.money, th.money { text-align: right; font-variant-numeric: tabular-nums linin
 
 .tag-line { display: flex; flex-direction: column; gap: var(--gap-2); min-width: 10rem; }
 
-.tag-combobox { position: relative; }
+.combobox { position: relative; }
 
-.tag-combobox input {
+.combobox input {
   margin-top: 0;
   padding: 0.3rem 0.4rem;
   font-size: 0.9rem;
@@ -404,10 +404,10 @@ td.money, th.money { text-align: right; font-variant-numeric: tabular-nums linin
   border-bottom: 1px solid var(--rule-strong);
 }
 
-.tag-combobox input:focus { border-bottom-color: var(--signal); }
+.combobox input:focus { border-bottom-color: var(--signal); }
 
 /* The ruled slip a suggestion list is: square, hairline-ruled, never a floating card. */
-.tag-suggestions {
+.combobox-suggestions {
   position: absolute;
   z-index: 20;
   top: 100%;
@@ -424,12 +424,12 @@ td.money, th.money { text-align: right; font-variant-numeric: tabular-nums linin
 
 /* Near the foot of the scrolling ledger there is no room below, and the slip would be clipped
    by the table's own scroll box, so it opens upward instead. */
-.tag-suggestions.is-above { top: auto; bottom: 100%; }
+.combobox-suggestions.is-above { top: auto; bottom: 100%; }
 
-.tag-suggestions[hidden] { display: none; }
-.tag-suggestions:focus { outline: none; }
+.combobox-suggestions[hidden] { display: none; }
+.combobox-suggestions:focus { outline: none; }
 
-.tag-suggestions li {
+.combobox-suggestions li {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -441,12 +441,12 @@ td.money, th.money { text-align: right; font-variant-numeric: tabular-nums linin
   white-space: nowrap;
 }
 
-.tag-suggestions li:last-child { border-bottom: 0; }
-.tag-suggestions li:hover,
-.tag-suggestions li.is-active { background: var(--paper-sunk); }
-.tag-suggestions li.is-create { color: var(--signal); font-weight: 550; }
+.combobox-suggestions li:last-child { border-bottom: 0; }
+.combobox-suggestions li:hover,
+.combobox-suggestions li.is-active { background: var(--paper-sunk); }
+.combobox-suggestions li.is-create { color: var(--signal); font-weight: 550; }
 
-.tag-suggestion-count {
+.combobox-meta {
   font-size: 0.705rem;
   font-weight: 650;
   font-stretch: 86%;
@@ -496,7 +496,7 @@ td.money, th.money { text-align: right; font-variant-numeric: tabular-nums linin
   border-left: 1px solid var(--signal);
 }
 
-.selection-bar .tag-combobox { flex: 1 1 14rem; }
+.selection-bar .combobox { flex: 1 1 14rem; }
 
 .selection-count {
   font-size: 0.705rem;

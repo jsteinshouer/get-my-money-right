@@ -412,6 +412,13 @@ export function ImportPage() {
         <p>Read a CSV export from the bank, and remember how that account's export is laid out.</p>
       </hgroup>
 
+      {/* The only way to the rules page, so it is on the page at every step — and before there is an
+          account to import into — rather than buried in one step's notes. */}
+      <p className="memo">
+        What an import does to your rows — which to classify, and which to skip — is set on the{' '}
+        <Link to="/import/rules">Import rules</Link> page.
+      </p>
+
       <ol className="stations" aria-label="Import steps">
         <Station state={step === 'upload' ? 'current' : 'done'}>Upload</Station>
         <Station state={stationState(step, 'map')}>Map columns</Station>
@@ -489,8 +496,8 @@ export function ImportPage() {
 
           <p className="memo">
             Rows you never want — autopay confirmations, the transfer to savings — are struck out in the
-            preview by an <Link to="/import/rules">ignore rule</Link>. You can also write one from the row
-            that provoked it, once the preview is on screen.
+            preview by an ignore rule. You can also write one from the row that provoked it, once the
+            preview is on screen.
           </p>
         </form>
       ) : !preview || !draft ? null : step === 'map' ? (
@@ -913,7 +920,7 @@ function PreviewStation({
             <p className="note" data-signal="true" role="alert">
               Nothing is left to import. A rule is almost certainly catching too much —{' '}
               <strong>{reasons.join(', ')}</strong>. Loosen or delete it on the{' '}
-              <Link to="/import/rules">ignore rules</Link> page.
+              <Link to="/import/rules">Import rules</Link> page.
             </p>
           )}
 
@@ -948,10 +955,6 @@ function PreviewStation({
               Choose another file
             </button>
           </div>
-
-          <p className="memo">
-            Rules are listed on the <Link to="/import/rules">ignore rules</Link> page.
-          </p>
         </>
       )}
     </>

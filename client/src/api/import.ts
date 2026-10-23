@@ -1,4 +1,5 @@
 import { ApiError, apiClient } from './client'
+import type { NeedWant } from './transactions'
 
 /** The five roles a CSV column can be given, plus the absence of one. */
 export type ColumnRole = 'date' | 'description' | 'amount' | 'debit' | 'credit' | null
@@ -59,6 +60,40 @@ export interface IgnoreRuleInput {
   accountId: number | null
   matchText: string
   matchType: IgnoreMatchType
+}
+
+/**
+ * A rule that says what a row *is*: any mix of category, Need/Want and tags, never none. Scoped and
+ * matched exactly as an ignore rule is.
+ */
+export interface AssignmentRule {
+  id: number
+  /** Null for a rule that applies to every account. */
+  accountId: number | null
+  accountName: string | null
+  matchText: string
+  matchType: IgnoreMatchType
+  categoryId: number | null
+  categoryName: string | null
+  needWant: NeedWant | null
+  tags: { id: number; name: string }[]
+  isActive: boolean
+}
+
+export interface AssignmentRuleInput {
+  accountId: number | null
+  matchText: string
+  matchType: IgnoreMatchType
+  categoryId: number | null
+  needWant: NeedWant | null
+  tagIds: number[]
+}
+
+/** What a rule assigns, as the rules page reads it back: "Groceries · Need · +Vacation 2026". */
+export function describeAssignments(rule: AssignmentRule): string {
+  return [rule.categoryName, rule.needWant, ...rule.tags.map((tag) => `+${tag.name}`)]
+    .filter((part): part is string => part !== null)
+    .join(' · ')
 }
 
 /**
@@ -209,6 +244,10 @@ export const importApi = {
   fetchIgnoreRules: () => apiClient.get<IgnoreRule[]>('/import/ignore-rules'),
   createIgnoreRule: (input: IgnoreRuleInput) => apiClient.post<IgnoreRule>('/import/ignore-rules', input),
   deleteIgnoreRule: (id: number) => apiClient.delete<void>(`/import/ignore-rules/${id}`),
+  fetchAssignmentRules: () => apiClient.get<AssignmentRule[]>('/import/assignment-rules'),
+  createAssignmentRule: (input: AssignmentRuleInput) =>
+    apiClient.post<AssignmentRule>('/import/assignment-rules', input),
+  deleteAssignmentRule: (id: number) => apiClient.delete<void>(`/import/assignment-rules/${id}`),
   saveMapping: (accountId: number, draft: MappingDraft) =>
     apiClient.put<SavedMapping>(`/import/mappings/${accountId}`, {
       dateColumn: draft.dateColumn,

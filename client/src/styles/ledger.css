@@ -779,8 +779,26 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
 .rule-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--gap-2);
+  align-items: center;
+  gap: var(--gap-2) var(--gap-4);
   margin-top: var(--gap-4);
+}
+
+/* The sentence's second clause — what a matching row is — continues the first without a new box. */
+.rule-lead-then { margin-top: var(--gap-4); }
+
+/* Category and Need/Want are short choices; the tag line takes what is left. */
+.rule-assignments { grid-template-columns: minmax(0, 1fr) minmax(0, 9rem) minmax(0, 2fr); }
+
+/* Why Save is unavailable, said beside it in the register of the labels — never a hover tooltip. */
+.rule-reason {
+  margin: 0;
+  font-size: 0.705rem;
+  font-weight: 650;
+  font-stretch: 86%;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 
 /* A marginal note, in the margin: one left rule and nothing else. */
