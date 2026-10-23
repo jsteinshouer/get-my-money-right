@@ -71,7 +71,7 @@ test('a rule written on the rules page strikes the matching row in the preview',
 
   // The rules page is reached from the Import page, not from the masthead.
   await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Import' }).click()
-  await page.getByRole('link', { name: 'ignore rule' }).click()
+  await page.getByRole('link', { name: 'Import rules' }).click()
   await expect(page.getByRole('heading', { name: 'Import rules' })).toBeVisible()
 
   // The page holds both kinds of rule; ignore rules are written in the section that skips rows.
@@ -132,7 +132,7 @@ test('a rule written from a preview row strikes that row in place', async ({ pag
   await expectTally(page, 4, 1)
 
   // The inter-account transfer is dropped by a text rule, because this app has no Transfer entity.
-  await expect(page.getByRole('link', { name: 'ignore rules' }).first()).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Import rules' }).first()).toBeVisible()
 })
 
 test('deleting a rule un-strikes the rows it was catching', async ({ page }) => {
@@ -149,7 +149,7 @@ test('deleting a rule un-strikes the rows it was catching', async ({ page }) => 
   await expect(shell).toHaveAttribute('data-skipped', 'true')
   await expectTally(page, 4, 1)
 
-  await page.getByRole('link', { name: 'ignore rules' }).first().click()
+  await page.getByRole('link', { name: 'Import rules' }).first().click()
   await expect(page.getByRole('heading', { name: 'Import rules' })).toBeVisible()
 
   const ruleRow = page.getByRole('row').filter({ hasText: 'SHELL OIL' }).filter({ hasText: accountName })

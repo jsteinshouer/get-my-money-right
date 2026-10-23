@@ -31,7 +31,7 @@ async function openRulesPage(page: Page) {
   const sections = page.getByRole('navigation', { name: 'Sections' })
   await expect(sections.getByRole('link', { name: /rules/i })).toHaveCount(0)
   await sections.getByRole('link', { name: 'Import' }).click()
-  await page.getByRole('link', { name: 'ignore rule' }).click()
+  await page.getByRole('link', { name: 'Import rules' }).click()
   await expect(page.getByRole('heading', { name: 'Import rules' })).toBeVisible()
 }
 
