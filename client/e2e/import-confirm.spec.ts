@@ -71,7 +71,7 @@ test('importing a statement writes its rows uncategorized, and re-importing it s
   await expect(entry(page, 'AUTOPAY THANK YOU')).toContainText('Skipped · contains AUTOPAY')
   await expectTally(page, 3, 1, 0)
   // The guess is said before it is made: nothing files these rows, so they arrive as Wants.
-  await expect(page.getByText('Each lands with no category, as a Want, until someone files them.')).toBeVisible()
+  await expect(page.getByText('Each lands with no category, as a Want unless a rule said otherwise, until someone files them.')).toBeVisible()
   // Focus returns to the row the rule was written from, now carrying its strike.
   await expect(entry(page, 'AUTOPAY THANK YOU')).toBeFocused()
 

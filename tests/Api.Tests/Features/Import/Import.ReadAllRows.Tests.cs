@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Api.Tests.Fixtures;
 using static Api.Features.Import.Import;
+using static Api.Features.Transactions.Transactions;
 using static Api.Tests.Features.Import.ImportTestHelpers;
 
 namespace Api.Tests.Features.Import;
@@ -213,6 +214,153 @@ public class ReadAllRowsTests : IClassFixture<BudgetApiFactory>
         var response = await ReadAsync(client, "not-a-real-token", Mapping());
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // --- assignment rules in the preview (ticket 14). Rules are scoped to each test's own account,
+    // because the test class shares one database.
+
+    [Fact]
+    public async Task Read_WithAssignmentRules_PrintsHowEachRowWillBeFiledAndWhichRulesDecidedIt()
+    {
+        var client = await LoggedInClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Classified {Guid.NewGuid():N}");
+        var groceriesName = $"Groceries {Guid.NewGuid():N}";
+        var groceries = await CreateCategoryAsync(client, groceriesName);
+        var travelName = $"Travel {Guid.NewGuid():N}";
+        var travel = await CreateCategoryAsync(client, travelName);
+        var vacationName = $"Vacation {Guid.NewGuid():N}";
+        var vacation = await CreateTagAsync(client, vacationName);
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "KROGER", IgnoreMatchType.Contains, groceries, NeedWant.Need, []));
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "DELTA", IgnoreMatchType.StartsWith, travel, null, []));
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "AIR LINES", IgnoreMatchType.Contains, null, null, [vacation]));
+        // Judges the row without filing it: it keeps no category, and stays for review.
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "SHELL", IgnoreMatchType.StartsWith, null, NeedWant.Need, []));
+        // Matches nothing in this file, and says nothing about it.
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "NO SUCH PAYEE", IgnoreMatchType.Contains, groceries, null, []));
+        var preview = await UploadOkAsync(client, accountId, "assignment-match.csv");
+
+        var result = await ReadOkAsync(client, preview.Token, Mapping());
+
+        var kroger = result.Rows.Single(r => r.Description == "KROGER #442");
+        Assert.Equal(groceries, kroger.CategoryId);
+        Assert.Equal(groceriesName, kroger.CategoryName);
+        Assert.Equal(NeedWant.Need, kroger.NeedWant);
+        Assert.Empty(kroger.Tags);
+        Assert.Equal(["contains KROGER"], kroger.ClassifiedBy);
+
+        // Two rules contributed, so both are cited — the category from one, the tag from the other.
+        var delta = result.Rows.Single(r => r.Description == "DELTA AIR LINES 0062");
+        Assert.Equal(travelName, delta.CategoryName);
+        Assert.Equal(NeedWant.Want, delta.NeedWant);
+        Assert.Equal(vacationName, Assert.Single(delta.Tags).Name);
+        Assert.Equal(["starts with DELTA", "contains AIR LINES"], delta.ClassifiedBy);
+
+        // Nobody taught the app about this one: no category, the import's Want, and no rule to cite.
+        var traderJoes = result.Rows.Single(r => r.Description == "TRADER JOE'S #221");
+        Assert.Null(traderJoes.CategoryId);
+        Assert.Null(traderJoes.CategoryName);
+        Assert.Equal(NeedWant.Want, traderJoes.NeedWant);
+        Assert.Empty(traderJoes.ClassifiedBy);
+
+        var shell = result.Rows.Single(r => r.Description == "SHELL OIL 5578");
+        Assert.Null(shell.CategoryId);
+        Assert.Equal(NeedWant.Need, shell.NeedWant);
+        Assert.Equal(["starts with SHELL"], shell.ClassifiedBy);
+
+        Assert.Equal(5, result.WillImportCount);
+        Assert.Equal(2, result.ClassifiedCount);
+        // Trader Joe's, Shell and the autopay: a row is for review while it has no category.
+        Assert.Equal(3, result.ForReviewCount);
+    }
+
+    [Fact]
+    public async Task Read_AfterARuleIsWritten_ReadsTheFileThroughItWithoutReUploading()
+    {
+        var client = await LoggedInClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Fresh Rules {Guid.NewGuid():N}");
+        var groceries = await CreateCategoryAsync(client, $"Groceries {Guid.NewGuid():N}");
+        var preview = await UploadOkAsync(client, accountId, "assignment-match.csv");
+        var before = await ReadOkAsync(client, preview.Token, Mapping());
+
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "KROGER", IgnoreMatchType.Contains, groceries, NeedWant.Need, []));
+        var after = await ReadOkAsync(client, preview.Token, Mapping());
+
+        Assert.Equal(0, before.ClassifiedCount);
+        Assert.Equal(1, after.ClassifiedCount);
+        Assert.Equal(groceries, after.Rows.Single(r => r.Description == "KROGER #442").CategoryId);
+    }
+
+    [Fact]
+    public async Task Read_WithNoAssignmentRules_EveryRowGoingInIsForReview()
+    {
+        var client = await LoggedInClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Unclassified {Guid.NewGuid():N}");
+        var preview = await UploadOkAsync(client, accountId, "assignment-match.csv");
+
+        var result = await ReadOkAsync(client, preview.Token, Mapping());
+
+        Assert.All(result.Rows, row =>
+        {
+            Assert.Null(row.CategoryId);
+            Assert.Equal(NeedWant.Want, row.NeedWant);
+            Assert.Empty(row.ClassifiedBy);
+        });
+        Assert.Equal(0, result.ClassifiedCount);
+        Assert.Equal(5, result.ForReviewCount);
+    }
+
+    [Fact]
+    public async Task Read_RowsThatAreLeaving_CarryNoAssignments()
+    {
+        var client = await LoggedInClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Leaving {Guid.NewGuid():N}");
+        var fuel = await CreateCategoryAsync(client, $"Fuel {Guid.NewGuid():N}");
+        var bills = await CreateCategoryAsync(client, $"Bills {Guid.NewGuid():N}");
+        await CreateIgnoreRuleAsync(client, accountId, "AUTOPAY", IgnoreMatchType.Contains);
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "AUTOPAY", IgnoreMatchType.Contains, bills, NeedWant.Need, []));
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "STATEMENT", IgnoreMatchType.StartsWith, bills, NeedWant.Need, []));
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "SHELL", IgnoreMatchType.StartsWith, fuel, NeedWant.Need, []));
+        // Import the file once, so reading it again finds its rows already in the ledger.
+        await SaveMappingAsync(client, accountId, SignedAmountMapping());
+        (await client.PostAsync($"/api/import/previews/{(await UploadOkAsync(client, accountId, "assignment-match.csv")).Token}/confirm", null))
+            .EnsureSuccessStatusCode();
+
+        var again = await ReadOkAsync(client, (await UploadOkAsync(client, accountId, "assignment-match.csv")).Token, Mapping());
+        var unreadable = await ReadOkAsync(client, (await UploadOkAsync(client, accountId, "unreadable-row.csv")).Token, Mapping());
+
+        // Struck: the row is leaving, so classifying it would mean nothing.
+        var autopay = again.Rows.Single(r => r.Description == "AUTOPAY THANK YOU");
+        Assert.NotNull(autopay.SkippedReason);
+        AssertNoAssignments(autopay);
+
+        // Already in the ledger: the duplicate mark wins.
+        var shell = again.Rows.Single(r => r.Description == "SHELL OIL 5578");
+        Assert.True(shell.IsDuplicate);
+        AssertNoAssignments(shell);
+        Assert.Equal(0, again.ClassifiedCount);
+        Assert.Equal(0, again.ForReviewCount);
+
+        // Unreadable: there is nothing to classify until it can be read.
+        var statement = unreadable.Rows.Single(r => r.Description == "STATEMENT BALANCE");
+        Assert.NotNull(statement.Error);
+        AssertNoAssignments(statement);
+    }
+
+    private static void AssertNoAssignments(ReadAllRows.Row row)
+    {
+        Assert.Null(row.CategoryId);
+        Assert.Null(row.NeedWant);
+        Assert.Empty(row.Tags);
+        Assert.Empty(row.ClassifiedBy);
     }
 
     private static Task<HttpResponseMessage> ReadAsync(HttpClient client, string token, ReadAllRows.Command command) =>

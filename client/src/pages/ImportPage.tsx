@@ -17,6 +17,7 @@ import {
   dateFormats,
   delimiterLabel,
   delimiters,
+  filedAs,
   importApi,
   type ColumnRole,
   type FullPreview,
@@ -383,7 +384,8 @@ export function ImportPage() {
       const queue = await transactionsApi
         .fetchAll({ accountId: preview.accountId, uncategorized: true })
         .catch(() => null)
-      setWaiting(queue?.length ?? outcome.imported)
+      // Failing that, this file's own rows for review: the classified ones are not waiting.
+      setWaiting(queue?.length ?? rows?.forReviewCount ?? outcome.imported)
       setResult(outcome)
       setSlipRow(null)
     } catch (error) {
@@ -799,66 +801,73 @@ function PreviewStation({
           <span className="reading-file">{fileName}</span>
         </p>
 
-        {rows.rows.map((row, index) => (
-          <Fragment key={index}>
-            <div
-              className="preview-entry"
-              data-entry={index}
-              tabIndex={-1}
-              data-skipped={row.skippedReason !== null}
-              data-duplicate={row.isDuplicate}
-              data-strike={justStruck.has(index) ? 'draw' : undefined}
-            >
-              <div className="preview-line">
-                <ReadingLine row={row} />
-                {/* Every row still going in carries this, including one that failed to parse: its
-                    description is perfectly readable, and it is exactly the kind of row a rule
-                    gets written from. A duplicate is leaving already, so a rule would change nothing. */}
-                {!imported && row.skippedReason === null && !row.isDuplicate && (
-                  <button
-                    type="button"
-                    className="preview-rule-open"
-                    aria-expanded={slipRow === index}
-                    // Every row carries the same words; the row's own description tells them apart.
-                    aria-label={`Ignore rows like this: ${row.description ?? 'this row'}`}
-                    onClick={() => onOpenSlip(slipRow === index ? null : index)}
-                  >
-                    Ignore rows like this
-                  </button>
-                )}
-              </div>
-
-              {/* Real text, not an ARIA label: the reason is read by everybody, and it names the
-                  rule that caught the row so an over-broad one is diagnosable at a glance. */}
-              {row.skippedReason !== null && <p className="preview-skip">Skipped · {row.skippedReason}</p>}
-              {/* Not struck: the pen stroke means a rule caught the row, and no rule did. The row is
-                  already in the ledger, and says so in the same register. */}
-              {row.isDuplicate && <p className="preview-skip">Already imported</p>}
-              {row.error !== null && <p className="preview-problem">{row.error}</p>}
-            </div>
-
-            {!imported && slipRow === index && (
-              <div className="preview-slip">
-                <div className="correction-slip">
-                  <div className="correction-head">
-                    <h3>Ignore rows like this</h3>
-                    <p>{row.description ?? 'this row'}</p>
-                  </div>
-                  <IgnoreRuleForm
-                    accounts={accounts}
-                    // Pre-filled from the description the row is showing: matching against anything
-                    // else would strike a row for text the household never saw.
-                    initialMatchText={row.description ?? ''}
-                    initialAccountId={accountId}
-                    submitLabel="Add rule"
-                    onSaved={onRuleSaved}
-                    onCancel={() => onOpenSlip(null)}
-                  />
+        {rows.rows.map((row, index) => {
+          const filed = filedAs(row)
+          return (
+            <Fragment key={index}>
+              <div
+                className="preview-entry"
+                data-entry={index}
+                tabIndex={-1}
+                data-skipped={row.skippedReason !== null}
+                data-duplicate={row.isDuplicate}
+                data-strike={justStruck.has(index) ? 'draw' : undefined}
+              >
+                <div className="preview-line">
+                  <ReadingLine row={row} />
+                  {/* Every row still going in carries this, including one that failed to parse: its
+                      description is perfectly readable, and it is exactly the kind of row a rule
+                      gets written from. A duplicate is leaving already, so a rule would change nothing. */}
+                  {!imported && row.skippedReason === null && !row.isDuplicate && (
+                    <button
+                      type="button"
+                      className="preview-rule-open"
+                      aria-expanded={slipRow === index}
+                      // Every row carries the same words; the row's own description tells them apart.
+                      aria-label={`Ignore rows like this: ${row.description ?? 'this row'}`}
+                      onClick={() => onOpenSlip(slipRow === index ? null : index)}
+                    >
+                      Ignore rows like this
+                    </button>
+                  )}
                 </div>
+
+                {/* Real text, not an ARIA label: the reason is read by everybody, and it names the
+                    rule that caught the row so an over-broad one is diagnosable at a glance. */}
+                {row.skippedReason !== null && <p className="preview-skip">Skipped · {row.skippedReason}</p>}
+                {/* How a row going in will be filed, and the rule that decided it — in the strike
+                    reason's register, real text for everybody. A row nobody has taught the app about
+                    says so rather than staying bare: its Want is a guess, made in the open. */}
+                {filed !== null && <p className="preview-skip preview-filed">{filed}</p>}
+                {/* Not struck: the pen stroke means a rule caught the row, and no rule did. The row is
+                    already in the ledger, and says so in the same register. */}
+                {row.isDuplicate && <p className="preview-skip">Already imported</p>}
+                {row.error !== null && <p className="preview-problem">{row.error}</p>}
               </div>
-            )}
-          </Fragment>
-        ))}
+
+              {!imported && slipRow === index && (
+                <div className="preview-slip">
+                  <div className="correction-slip">
+                    <div className="correction-head">
+                      <h3>Ignore rows like this</h3>
+                      <p>{row.description ?? 'this row'}</p>
+                    </div>
+                    <IgnoreRuleForm
+                      accounts={accounts}
+                      // Pre-filled from the description the row is showing: matching against anything
+                      // else would strike a row for text the household never saw.
+                      initialMatchText={row.description ?? ''}
+                      initialAccountId={accountId}
+                      submitLabel="Add rule"
+                      onSaved={onRuleSaved}
+                      onCancel={() => onOpenSlip(null)}
+                    />
+                  </div>
+                </div>
+              )}
+            </Fragment>
+          )
+        })}
       </section>
 
       {result !== null ? (
@@ -871,12 +880,16 @@ function PreviewStation({
         />
       ) : (
         <>
-          {/* Entries, the way a ledger closes a figure. Every row that goes in arrives with no
-              category, so all of them are for review until assignment rules can categorize a row. */}
+          {/* Entries, the way a ledger closes a figure: what the rules filed, what they left for a
+              person, and what is not going in at all. */}
           <div className="exceptions">
             <div className="exception">
+              <span className="exception-label">Classified</span>
+              <span className="exception-count num">{rows.classifiedCount}</span>
+            </div>
+            <div className="exception">
               <span className="exception-label">For review</span>
-              <span className="exception-count num">{rows.willImportCount}</span>
+              <span className="exception-count num">{rows.forReviewCount}</span>
             </div>
             <div className="exception">
               <span className="exception-label">Skipped by a rule</span>
@@ -888,20 +901,21 @@ function PreviewStation({
             </div>
           </div>
 
-          {/* The guess, made in the open: nothing has filed these rows, so they arrive with no
-              category and counted as a Want until a person says otherwise (ADR-0001). */}
-          {rows.willImportCount > 0 && (
+          {/* The guess, made in the open: no rule has filed these rows, so they arrive with no
+              category — and as a Want, unless a rule judged them — until a person says otherwise
+              (ADR-0001). */}
+          {rows.forReviewCount > 0 && (
             <p className="close-note">
-              {rows.willImportCount === 1 ? 'It lands' : 'Each lands'} with no category, as a Want, until someone files{' '}
-              {rows.willImportCount === 1 ? 'it' : 'them'}.
+              {rows.forReviewCount === 1 ? 'It lands' : 'Each lands'} with no category, as a Want unless a rule said
+              otherwise, until someone files {rows.forReviewCount === 1 ? 'it' : 'them'}.
             </p>
           )}
 
           {/* One sentence for assistive technology, rather than three figures each announced alone
               as a rule re-counts them. */}
           <p className="visually-hidden" aria-live="polite">
-            {rows.willImportCount} for review, {rows.skippedCount} skipped by a rule, {rows.duplicateCount} already
-            imported.
+            {rows.classifiedCount} classified, {rows.forReviewCount} for review, {rows.skippedCount} skipped by a rule,{' '}
+            {rows.duplicateCount} already imported.
           </p>
 
           {/* Unreadable rows are named in the margin rather than given a count of their own: they

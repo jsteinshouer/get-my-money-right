@@ -100,6 +100,10 @@ export function describeAssignments(rule: AssignmentRule): string {
  * A row carries at most one reason for leaving. A non-null `skippedReason` is the strike, and it
  * silences `error`: the row is leaving anyway. `isDuplicate` is only ever set on a readable,
  * unstruck row — one the ledger already holds.
+ *
+ * A row going in carries what it will be written as — its category (or none), its Need/Want and
+ * its tags — and `classifiedBy` names every rule that decided any of it, the way `skippedReason`
+ * names the rule that struck a row. A row that is leaving has a null `needWant` and nothing else.
  */
 export interface PreviewRow {
   date: string | null
@@ -108,6 +112,11 @@ export interface PreviewRow {
   error: string | null
   skippedReason: string | null
   isDuplicate: boolean
+  categoryId: number | null
+  categoryName: string | null
+  needWant: NeedWant | null
+  tags: { id: number; name: string }[]
+  classifiedBy: string[]
 }
 
 export interface FullPreview {
@@ -116,6 +125,28 @@ export interface FullPreview {
   skippedCount: number
   duplicateCount: number
   errorCount: number
+  /** Rows going in that a rule gives a category. */
+  classifiedCount: number
+  /** Rows going in with no category: the review queue they will join. */
+  forReviewCount: number
+}
+
+/**
+ * How a row going in will be filed, as its second line reads it: the category (or its absence), the
+ * Need/Want, the tags, then the rule that decided it — named in full when there is one, counted when
+ * there are several — and `for review` while the row has no category. Null for a row that is leaving.
+ */
+export function filedAs(row: PreviewRow): string | null {
+  if (row.needWant === null) return null
+  const citation =
+    row.classifiedBy.length === 1 ? [row.classifiedBy[0]] : row.classifiedBy.length > 1 ? [`${row.classifiedBy.length} rules`] : []
+  return [
+    row.categoryName ?? 'No category',
+    row.needWant,
+    ...row.tags.map((tag) => `+${tag.name}`),
+    ...citation,
+    ...(row.categoryId === null ? ['for review'] : []),
+  ].join(' · ')
 }
 
 /** What a confirmed import wrote, and what it left out and why. */

@@ -703,7 +703,10 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
   animation: strike-through 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* The row's second line: why it is leaving, or how it will be filed. It is the row's meaning, so on a
+   narrow screen it wraps — even inside a long payee or rule — rather than hiding behind an ellipsis. */
 .preview-skip {
+  overflow-wrap: anywhere;
   margin-top: 0.15rem;
   padding-left: calc(7.5rem + var(--gap-4));
   font-size: 0.66rem;
