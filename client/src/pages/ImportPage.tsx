@@ -17,6 +17,7 @@ import {
   dateFormats,
   delimiterLabel,
   delimiters,
+  filedAs,
   importApi,
   type ColumnRole,
   type FullPreview,
@@ -831,6 +832,10 @@ function PreviewStation({
               {/* Real text, not an ARIA label: the reason is read by everybody, and it names the
                   rule that caught the row so an over-broad one is diagnosable at a glance. */}
               {row.skippedReason !== null && <p className="preview-skip">Skipped · {row.skippedReason}</p>}
+              {/* How a row going in will be filed, and the rule that decided it — in the strike
+                  reason's register, real text for everybody. A row nobody has taught the app about
+                  says so rather than staying bare: its Want is a guess, made in the open. */}
+              {filedAs(row) !== null && <p className="preview-skip preview-filed">{filedAs(row)}</p>}
               {/* Not struck: the pen stroke means a rule caught the row, and no rule did. The row is
                   already in the ledger, and says so in the same register. */}
               {row.isDuplicate && <p className="preview-skip">Already imported</p>}
@@ -871,12 +876,16 @@ function PreviewStation({
         />
       ) : (
         <>
-          {/* Entries, the way a ledger closes a figure. Every row that goes in arrives with no
-              category, so all of them are for review until assignment rules can categorize a row. */}
+          {/* Entries, the way a ledger closes a figure: what the rules filed, what they left for a
+              person, and what is not going in at all. */}
           <div className="exceptions">
             <div className="exception">
+              <span className="exception-label">Classified</span>
+              <span className="exception-count num">{rows.classifiedCount}</span>
+            </div>
+            <div className="exception">
               <span className="exception-label">For review</span>
-              <span className="exception-count num">{rows.willImportCount}</span>
+              <span className="exception-count num">{rows.forReviewCount}</span>
             </div>
             <div className="exception">
               <span className="exception-label">Skipped by a rule</span>
@@ -888,20 +897,21 @@ function PreviewStation({
             </div>
           </div>
 
-          {/* The guess, made in the open: nothing has filed these rows, so they arrive with no
-              category and counted as a Want until a person says otherwise (ADR-0001). */}
-          {rows.willImportCount > 0 && (
+          {/* The guess, made in the open: no rule has filed these rows, so they arrive with no
+              category — and as a Want, unless a rule judged them — until a person says otherwise
+              (ADR-0001). */}
+          {rows.forReviewCount > 0 && (
             <p className="close-note">
-              {rows.willImportCount === 1 ? 'It lands' : 'Each lands'} with no category, as a Want, until someone files{' '}
-              {rows.willImportCount === 1 ? 'it' : 'them'}.
+              {rows.forReviewCount === 1 ? 'It lands' : 'Each lands'} with no category, as a Want unless a rule said
+              otherwise, until someone files {rows.forReviewCount === 1 ? 'it' : 'them'}.
             </p>
           )}
 
           {/* One sentence for assistive technology, rather than three figures each announced alone
               as a rule re-counts them. */}
           <p className="visually-hidden" aria-live="polite">
-            {rows.willImportCount} for review, {rows.skippedCount} skipped by a rule, {rows.duplicateCount} already
-            imported.
+            {rows.classifiedCount} classified, {rows.forReviewCount} for review, {rows.skippedCount} skipped by a rule,{' '}
+            {rows.duplicateCount} already imported.
           </p>
 
           {/* Unreadable rows are named in the margin rather than given a count of their own: they

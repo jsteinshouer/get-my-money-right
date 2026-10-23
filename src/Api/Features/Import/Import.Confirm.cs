@@ -10,9 +10,10 @@ public static partial class Import
 {
     /// <summary>
     /// The import itself: the held file read through the account's saved mapping and the
-    /// <see cref="Pipeline"/>, and every row that survives it written as a transaction. A row
-    /// arrives uncategorized and as a Want (ADR-0001): uncategorized is the review queue, and a
-    /// guessed Want overstates discretionary spending where a guessed Need would quietly hide it.
+    /// <see cref="Pipeline"/>, and every row that survives it written as a transaction carrying what
+    /// the assignment rules decided for it. Whatever no rule decided arrives uncategorized and as a
+    /// Want (ADR-0001): uncategorized is the review queue, and a guessed Want overstates
+    /// discretionary spending where a guessed Need would quietly hide it.
     /// </summary>
     public static partial class Confirm
     {
@@ -83,22 +84,32 @@ public static partial class Import
                             : $"{unreadable} rows could not be read. Fix the mapping, or write a rule that skips them, then import.");
                     }
 
-                    var imported = rows
-                        .Where(r => r.Outcome == Pipeline.Outcome.Import)
+                    var going = rows.Where(r => r.Outcome == Pipeline.Outcome.Import).ToList();
+                    var imported = going
                         .Select(r => new Transaction
                         {
                             AccountId = entry.AccountId,
-                            CategoryId = null,
+                            CategoryId = r.Assigned?.CategoryId,
                             Date = r.Date!.Value,
                             Amount = r.Amount!.Value,
                             Description = r.Description!,
-                            NeedWant = NeedWant.Want,
+                            NeedWant = r.Assigned?.NeedWant ?? NeedWant.Want,
                             CreatedByUserId = createdByUserId,
                         })
                         .ToList();
 
+                    // The tags need the transactions' ids, so they are written second; one database
+                    // transaction keeps an import from landing without the tags its rules gave it.
+                    await using var write = await _db.Database.BeginTransactionAsync(cancellationToken);
                     _db.Transactions.AddRange(imported);
                     await _db.SaveChangesAsync(cancellationToken);
+
+                    _db.TransactionTags.AddRange(going
+                        .Zip(imported)
+                        .SelectMany(pair => (pair.First.Assigned?.TagIds ?? [])
+                            .Select(tagId => new Tags.Tags.TransactionTag { TransactionId = pair.Second.Id, TagId = tagId })));
+                    await _db.SaveChangesAsync(cancellationToken);
+                    await write.CommitAsync(cancellationToken);
 
                     // The file has done its job; confirming it again would only re-run the dedupe.
                     _cache.Remove(token);
