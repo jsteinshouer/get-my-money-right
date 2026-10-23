@@ -6,7 +6,7 @@ import { importApi, matchTypes, type AssignmentRule, type IgnoreMatchType } from
 import type { Tag } from '../api/tags'
 import type { NeedWant } from '../api/transactions'
 import { AccountSelect } from './AccountSelect'
-import { CategorySelect } from './CategorySelect'
+import { CategoryCombobox } from './CategoryCombobox'
 import { NeedWantSelect } from './NeedWantSelect'
 import { TagLine } from './TagLine'
 
@@ -19,12 +19,14 @@ export function AssignmentRuleForm({
   accounts,
   categories,
   tags,
+  onCreateCategory,
   onCreateTag,
   onSaved,
 }: {
   accounts: Account[]
   categories: Category[]
   tags: Tag[]
+  onCreateCategory: (name: string) => Promise<Category | null>
   onCreateTag: (name: string) => Promise<Tag | null>
   onSaved: (rule: AssignmentRule) => void
 }) {
@@ -36,6 +38,7 @@ export function AssignmentRuleForm({
   const [needWant, setNeedWant] = useState<NeedWant | ''>('')
   const [tagIds, setTagIds] = useState<number[]>([])
   const [creatingTag, setCreatingTag] = useState(false)
+  const [creatingCategory, setCreatingCategory] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -132,12 +135,13 @@ export function AssignmentRuleForm({
       <div className="rule-fields rule-assignments">
         <label htmlFor={`${fieldId}-category`}>
           Category
-          <CategorySelect
+          <CategoryCombobox
             id={`${fieldId}-category`}
             categories={categories}
             value={categoryId}
             onChange={setCategoryId}
-            placeholder="Leave unset"
+            onCreate={onCreateCategory}
+            onBusyChange={setCreatingCategory}
           />
         </label>
 
@@ -172,8 +176,8 @@ export function AssignmentRuleForm({
       <div className="rule-actions">
         <button
           type="submit"
-          disabled={saving || creatingTag || setsNothing}
-          aria-busy={saving || creatingTag || undefined}
+          disabled={saving || creatingTag || creatingCategory || setsNothing}
+          aria-busy={saving || creatingTag || creatingCategory || undefined}
           aria-describedby={setsNothing ? `${fieldId}-reason` : undefined}
         >
           Save rule

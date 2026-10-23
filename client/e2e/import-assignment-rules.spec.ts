@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 
 async function logIn(page: Page) {
   await page.goto('/login')
@@ -35,6 +35,14 @@ async function openRulesPage(page: Page) {
   await expect(page.getByRole('heading', { name: 'Import rules' })).toBeVisible()
 }
 
+/** The category is written, not hunted in a list: type its name and take the match. */
+async function chooseCategory(form: Locator, name: string) {
+  const field = form.getByRole('combobox', { name: 'Category' })
+  await field.fill(name)
+  await field.press('Enter')
+  await expect(field).toHaveValue(name)
+}
+
 function classifySection(page: Page) {
   return page.getByRole('region', { name: 'Rules that classify a row' })
 }
@@ -67,7 +75,7 @@ test('an assignment rule is written on the rules page, read back as a sentence, 
   await expect(classify.getByText('Set a category, Need or Want, or a tag to save this rule')).toBeVisible()
 
   await classify.getByLabel('Match').selectOption('Contains')
-  await classify.getByLabel('Category').selectOption({ label: categoryName })
+  await chooseCategory(classify, categoryName)
   await classify.getByLabel('Need or want').selectOption('Need')
   await classify.getByRole('combobox', { name: 'Add a tag' }).fill(tagName)
   await classify.getByRole('combobox', { name: 'Add a tag' }).press('Enter')
@@ -119,7 +127,7 @@ test('a category an assignment rule uses cannot be deleted, and the categories p
 
   const classify = classifySection(page)
   await classify.getByLabel('These words').fill(`RULED ${stamp}`)
-  await classify.getByLabel('Category').selectOption({ label: categoryName })
+  await chooseCategory(classify, categoryName)
   await classify.getByRole('button', { name: 'Save rule' }).click()
   await expect(classify.getByRole('row').filter({ hasText: `RULED ${stamp}` })).toBeVisible()
 
@@ -129,4 +137,42 @@ test('a category an assignment rule uses cannot be deleted, and the categories p
 
   await expect(page.getByRole('alert')).toContainText('used by 1 assignment rule')
   await expect(categoryRow).toBeVisible()
+})
+
+test('a category that does not exist yet is created from the rule that needs it', async ({ page }) => {
+  const stamp = Date.now()
+  const categoryName = `E2E Fresh ${stamp}`
+  const matchText = `FRESH ${stamp}`
+
+  await logIn(page)
+  await addAccount(page, `E2E Fresh Account ${stamp}`)
+  await openRulesPage(page)
+
+  const classify = classifySection(page)
+  await classify.getByLabel('These words').fill(matchText)
+
+  // A name the household doesn't have yet is offered as a new category, in place.
+  const field = classify.getByRole('combobox', { name: 'Category' })
+  await field.fill(categoryName)
+  await expect(classify.getByRole('option', { name: `New category “${categoryName}”` })).toBeVisible()
+  await field.press('Enter')
+  await expect(field).toHaveValue(categoryName)
+
+  // Clearing the field unsets the category again, and the rule is back to setting nothing.
+  await field.fill('')
+  await expect(classify.getByText('Set a category, Need or Want, or a tag to save this rule')).toBeVisible()
+
+  // The category it created is now an ordinary match, not a second "new" offer.
+  await field.fill(categoryName)
+  await expect(classify.getByRole('option', { name: categoryName, exact: true })).toBeVisible()
+  await expect(classify.getByRole('option', { name: /New category/ })).toHaveCount(0)
+  await field.press('Enter')
+
+  await classify.getByRole('button', { name: 'Save rule' }).click()
+  const ruleRow = classify.getByRole('row').filter({ hasText: matchText })
+  await expect(ruleRow.getByRole('cell').nth(1)).toHaveText(categoryName)
+
+  // It is a real category, on the Categories page like any other.
+  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Categories' }).click()
+  await expect(page.getByRole('row').filter({ hasText: categoryName })).toBeVisible()
 })

@@ -81,6 +81,22 @@ export function IgnoreRulesPage() {
     void loadTags()
   }, [loadAssignmentRules, loadIgnoreRules, loadAccounts, loadCategories, loadTags])
 
+  async function createCategory(name: string): Promise<Category | null> {
+    setError(null)
+    try {
+      const created = await categoriesApi.create(name)
+      await loadCategories()
+      return created
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.status === 409
+          ? `A category called “${name}” already exists.`
+          : 'Failed to create the category.',
+      )
+      return null
+    }
+  }
+
   async function createTag(name: string): Promise<Tag | null> {
     setError(null)
     try {
@@ -168,6 +184,7 @@ export function IgnoreRulesPage() {
             accounts={accounts}
             categories={categories}
             tags={tags}
+            onCreateCategory={createCategory}
             onCreateTag={createTag}
             onSaved={(rule) => {
               setError(null)
