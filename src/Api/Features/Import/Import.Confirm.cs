@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Api.Data;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using static Api.Features.Tags.Tags;
 using static Api.Features.Transactions.Transactions;
 
 namespace Api.Features.Import;
@@ -84,16 +85,16 @@ public static partial class Import
                             : $"{unreadable} rows could not be read. Fix the mapping, or write a rule that skips them, then import.");
                     }
 
-                    var going = rows.Where(r => r.Outcome == Pipeline.Outcome.Import).ToList();
-                    var imported = going
+                    var goingIn = rows.Where(r => r.Outcome == Pipeline.Outcome.Import).ToList();
+                    var imported = goingIn
                         .Select(r => new Transaction
                         {
                             AccountId = entry.AccountId,
-                            CategoryId = r.Assigned?.CategoryId,
+                            CategoryId = r.Assigned!.CategoryId,
                             Date = r.Date!.Value,
                             Amount = r.Amount!.Value,
                             Description = r.Description!,
-                            NeedWant = r.Assigned?.NeedWant ?? NeedWant.Want,
+                            NeedWant = r.Assigned.NeedWant,
                             CreatedByUserId = createdByUserId,
                         })
                         .ToList();
@@ -104,10 +105,10 @@ public static partial class Import
                     _db.Transactions.AddRange(imported);
                     await _db.SaveChangesAsync(cancellationToken);
 
-                    _db.TransactionTags.AddRange(going
+                    _db.TransactionTags.AddRange(goingIn
                         .Zip(imported)
-                        .SelectMany(pair => (pair.First.Assigned?.TagIds ?? [])
-                            .Select(tagId => new Tags.Tags.TransactionTag { TransactionId = pair.Second.Id, TagId = tagId })));
+                        .SelectMany(pair => pair.First.Assigned!.TagIds
+                            .Select(tagId => new TransactionTag { TransactionId = pair.Second.Id, TagId = tagId })));
                     await _db.SaveChangesAsync(cancellationToken);
                     await write.CommitAsync(cancellationToken);
 

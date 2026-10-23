@@ -24,8 +24,8 @@ public static partial class Import
         /// One row's fate. <paramref name="CaughtBy"/> is set only for <see cref="Outcome.Ignored"/>,
         /// <paramref name="Error"/> only for <see cref="Outcome.Unreadable"/>: the pipeline is
         /// terminal at each step, so a row carries exactly one reason for leaving.
-        /// <paramref name="Assigned"/> is set only on a row that is going in, and only when a rule
-        /// decided something about it — a row that is leaving is never classified.
+        /// <paramref name="Assigned"/> is set on every row that is going in — how it will be written —
+        /// and on no other: a row that is leaving is never classified.
         /// </summary>
         public record class Row(
             DateOnly? Date,
@@ -106,10 +106,6 @@ public static partial class Import
                 .Where(r => r.IsActive && (r.AccountId == null || r.AccountId == accountId))
                 .OrderBy(r => r.Id)
                 .ToListAsync(cancellationToken);
-            if (rules.Count == 0)
-            {
-                return rows;
-            }
 
             var ruleIds = rules.Select(r => r.Id).ToList();
             var tagsByRule = (await _db.ImportAssignmentRuleTags

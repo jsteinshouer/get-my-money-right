@@ -8,12 +8,14 @@ public static partial class Import
     public record class AssignmentRuleInForce(ImportAssignmentRule Rule, IReadOnlyList<int> TagIds);
 
     /// <summary>
-    /// What the rules decided for one row, and which rules decided it. A rule that matched but whose
-    /// every field an earlier rule had already settled decided nothing, and is not cited.
+    /// How one row going in will be written, and which rules decided it. Whatever no rule decided
+    /// takes the import's default — no category, and a Want (ADR-0001) — so the preview and the
+    /// confirm cannot disagree about it. A rule that matched but whose every field an earlier rule had
+    /// already settled decided nothing, and is not cited.
     /// </summary>
     public record class Assignment(
         int? CategoryId,
-        NeedWant? NeedWant,
+        NeedWant NeedWant,
         IReadOnlyList<int> TagIds,
         IReadOnlyList<ImportAssignmentRule> DecidedBy);
 
@@ -25,13 +27,15 @@ public static partial class Import
     /// </summary>
     public static class AssignmentResolution
     {
+        /// <summary>A row no rule decided anything about: uncategorized, and the import's guessed Want.</summary>
+        public static readonly Assignment Unclassified = new(null, NeedWant.Want, [], []);
+
         /// <param name="rules">The rules in force, in id order.</param>
-        /// <returns>Null when no rule decided anything about this row.</returns>
-        public static Assignment? Resolve(IEnumerable<AssignmentRuleInForce> rules, string? description)
+        public static Assignment Resolve(IEnumerable<AssignmentRuleInForce> rules, string? description)
         {
             if (string.IsNullOrWhiteSpace(description))
             {
-                return null;
+                return Unclassified;
             }
 
             int? categoryId = null;
@@ -67,7 +71,9 @@ public static partial class Import
                 }
             }
 
-            return decidedBy.Count == 0 ? null : new Assignment(categoryId, needWant, tagIds, decidedBy);
+            return decidedBy.Count == 0
+                ? Unclassified
+                : new Assignment(categoryId, needWant ?? NeedWant.Want, tagIds, decidedBy);
         }
     }
 }

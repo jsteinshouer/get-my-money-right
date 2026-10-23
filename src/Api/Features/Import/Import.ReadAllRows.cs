@@ -29,7 +29,7 @@ public static partial class Import
         /// <summary>
         /// A row carries at most one reason for leaving. A non-null <paramref name="SkippedReason"/>
         /// is the strike, and it silences <paramref name="Error"/>: the pipeline is map → ignore →
-        /// dedupe, so a row that both matches a rule and fails to parse is leaving either way, and
+        /// dedupe → assign, so a row that both matches a rule and fails to parse is leaving either way, and
         /// two reasons would read as two problems. <paramref name="IsDuplicate"/> comes after, so it
         /// is only ever set on a row that was readable and not struck.
         ///
@@ -115,16 +115,17 @@ public static partial class Import
                 var categoryIds = read.Select(r => r.Assigned?.CategoryId).OfType<int>().Distinct().ToList();
                 var tagIds = read.SelectMany(r => r.Assigned?.TagIds ?? []).Distinct().ToList();
                 var categoryNames = await _db.Categories
+                    .AsNoTracking()
                     .Where(c => categoryIds.Contains(c.Id))
                     .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
                 var tagNames = await _db.Tags
+                    .AsNoTracking()
                     .Where(t => tagIds.Contains(t.Id))
                     .ToDictionaryAsync(t => t.Id, t => t.Name, cancellationToken);
 
                 var rows = read
                     .Select(r =>
                     {
-                        var goingIn = r.Outcome == Pipeline.Outcome.Import;
                         var categoryId = r.Assigned?.CategoryId;
                         return new Row(
                             r.Date,
@@ -135,7 +136,7 @@ public static partial class Import
                             r.Outcome == Pipeline.Outcome.Duplicate,
                             categoryId,
                             categoryId is int id ? categoryNames.GetValueOrDefault(id) : null,
-                            goingIn ? r.Assigned?.NeedWant ?? NeedWant.Want : null,
+                            r.Assigned?.NeedWant,
                             (r.Assigned?.TagIds ?? [])
                                 .Select(tagId => new Tag(tagId, tagNames.GetValueOrDefault(tagId, string.Empty)))
                                 .OrderBy(tag => tag.Name, StringComparer.OrdinalIgnoreCase)
@@ -151,8 +152,8 @@ public static partial class Import
                     read.Count(r => r.Outcome == Pipeline.Outcome.Ignored),
                     read.Count(r => r.Outcome == Pipeline.Outcome.Duplicate),
                     read.Count(r => r.Outcome == Pipeline.Outcome.Unreadable),
-                    goingInRows.Count(r => r.Assigned?.CategoryId is not null),
-                    goingInRows.Count(r => r.Assigned?.CategoryId is null));
+                    goingInRows.Count(r => r.Assigned!.CategoryId is not null),
+                    goingInRows.Count(r => r.Assigned!.CategoryId is null));
             }
         }
     }

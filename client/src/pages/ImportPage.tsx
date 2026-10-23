@@ -384,7 +384,8 @@ export function ImportPage() {
       const queue = await transactionsApi
         .fetchAll({ accountId: preview.accountId, uncategorized: true })
         .catch(() => null)
-      setWaiting(queue?.length ?? outcome.imported)
+      // Failing that, this file's own rows for review: the classified ones are not waiting.
+      setWaiting(queue?.length ?? rows?.forReviewCount ?? outcome.imported)
       setResult(outcome)
       setSlipRow(null)
     } catch (error) {
@@ -800,70 +801,73 @@ function PreviewStation({
           <span className="reading-file">{fileName}</span>
         </p>
 
-        {rows.rows.map((row, index) => (
-          <Fragment key={index}>
-            <div
-              className="preview-entry"
-              data-entry={index}
-              tabIndex={-1}
-              data-skipped={row.skippedReason !== null}
-              data-duplicate={row.isDuplicate}
-              data-strike={justStruck.has(index) ? 'draw' : undefined}
-            >
-              <div className="preview-line">
-                <ReadingLine row={row} />
-                {/* Every row still going in carries this, including one that failed to parse: its
-                    description is perfectly readable, and it is exactly the kind of row a rule
-                    gets written from. A duplicate is leaving already, so a rule would change nothing. */}
-                {!imported && row.skippedReason === null && !row.isDuplicate && (
-                  <button
-                    type="button"
-                    className="preview-rule-open"
-                    aria-expanded={slipRow === index}
-                    // Every row carries the same words; the row's own description tells them apart.
-                    aria-label={`Ignore rows like this: ${row.description ?? 'this row'}`}
-                    onClick={() => onOpenSlip(slipRow === index ? null : index)}
-                  >
-                    Ignore rows like this
-                  </button>
-                )}
-              </div>
-
-              {/* Real text, not an ARIA label: the reason is read by everybody, and it names the
-                  rule that caught the row so an over-broad one is diagnosable at a glance. */}
-              {row.skippedReason !== null && <p className="preview-skip">Skipped · {row.skippedReason}</p>}
-              {/* How a row going in will be filed, and the rule that decided it — in the strike
-                  reason's register, real text for everybody. A row nobody has taught the app about
-                  says so rather than staying bare: its Want is a guess, made in the open. */}
-              {filedAs(row) !== null && <p className="preview-skip preview-filed">{filedAs(row)}</p>}
-              {/* Not struck: the pen stroke means a rule caught the row, and no rule did. The row is
-                  already in the ledger, and says so in the same register. */}
-              {row.isDuplicate && <p className="preview-skip">Already imported</p>}
-              {row.error !== null && <p className="preview-problem">{row.error}</p>}
-            </div>
-
-            {!imported && slipRow === index && (
-              <div className="preview-slip">
-                <div className="correction-slip">
-                  <div className="correction-head">
-                    <h3>Ignore rows like this</h3>
-                    <p>{row.description ?? 'this row'}</p>
-                  </div>
-                  <IgnoreRuleForm
-                    accounts={accounts}
-                    // Pre-filled from the description the row is showing: matching against anything
-                    // else would strike a row for text the household never saw.
-                    initialMatchText={row.description ?? ''}
-                    initialAccountId={accountId}
-                    submitLabel="Add rule"
-                    onSaved={onRuleSaved}
-                    onCancel={() => onOpenSlip(null)}
-                  />
+        {rows.rows.map((row, index) => {
+          const filed = filedAs(row)
+          return (
+            <Fragment key={index}>
+              <div
+                className="preview-entry"
+                data-entry={index}
+                tabIndex={-1}
+                data-skipped={row.skippedReason !== null}
+                data-duplicate={row.isDuplicate}
+                data-strike={justStruck.has(index) ? 'draw' : undefined}
+              >
+                <div className="preview-line">
+                  <ReadingLine row={row} />
+                  {/* Every row still going in carries this, including one that failed to parse: its
+                      description is perfectly readable, and it is exactly the kind of row a rule
+                      gets written from. A duplicate is leaving already, so a rule would change nothing. */}
+                  {!imported && row.skippedReason === null && !row.isDuplicate && (
+                    <button
+                      type="button"
+                      className="preview-rule-open"
+                      aria-expanded={slipRow === index}
+                      // Every row carries the same words; the row's own description tells them apart.
+                      aria-label={`Ignore rows like this: ${row.description ?? 'this row'}`}
+                      onClick={() => onOpenSlip(slipRow === index ? null : index)}
+                    >
+                      Ignore rows like this
+                    </button>
+                  )}
                 </div>
+
+                {/* Real text, not an ARIA label: the reason is read by everybody, and it names the
+                    rule that caught the row so an over-broad one is diagnosable at a glance. */}
+                {row.skippedReason !== null && <p className="preview-skip">Skipped · {row.skippedReason}</p>}
+                {/* How a row going in will be filed, and the rule that decided it — in the strike
+                    reason's register, real text for everybody. A row nobody has taught the app about
+                    says so rather than staying bare: its Want is a guess, made in the open. */}
+                {filed !== null && <p className="preview-skip preview-filed">{filed}</p>}
+                {/* Not struck: the pen stroke means a rule caught the row, and no rule did. The row is
+                    already in the ledger, and says so in the same register. */}
+                {row.isDuplicate && <p className="preview-skip">Already imported</p>}
+                {row.error !== null && <p className="preview-problem">{row.error}</p>}
               </div>
-            )}
-          </Fragment>
-        ))}
+
+              {!imported && slipRow === index && (
+                <div className="preview-slip">
+                  <div className="correction-slip">
+                    <div className="correction-head">
+                      <h3>Ignore rows like this</h3>
+                      <p>{row.description ?? 'this row'}</p>
+                    </div>
+                    <IgnoreRuleForm
+                      accounts={accounts}
+                      // Pre-filled from the description the row is showing: matching against anything
+                      // else would strike a row for text the household never saw.
+                      initialMatchText={row.description ?? ''}
+                      initialAccountId={accountId}
+                      submitLabel="Add rule"
+                      onSaved={onRuleSaved}
+                      onCancel={() => onOpenSlip(null)}
+                    />
+                  </div>
+                </div>
+              )}
+            </Fragment>
+          )
+        })}
       </section>
 
       {result !== null ? (

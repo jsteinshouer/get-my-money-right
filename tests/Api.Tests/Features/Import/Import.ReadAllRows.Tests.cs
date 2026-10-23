@@ -236,6 +236,9 @@ public class ReadAllRowsTests : IClassFixture<BudgetApiFactory>
             accountId, "DELTA", IgnoreMatchType.StartsWith, travel, null, []));
         await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
             accountId, "AIR LINES", IgnoreMatchType.Contains, null, null, [vacation]));
+        // Judges the row without filing it: it keeps no category, and stays for review.
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "SHELL", IgnoreMatchType.StartsWith, null, NeedWant.Need, []));
         // Matches nothing in this file, and says nothing about it.
         await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
             accountId, "NO SUCH PAYEE", IgnoreMatchType.Contains, groceries, null, []));
@@ -264,9 +267,33 @@ public class ReadAllRowsTests : IClassFixture<BudgetApiFactory>
         Assert.Equal(NeedWant.Want, traderJoes.NeedWant);
         Assert.Empty(traderJoes.ClassifiedBy);
 
+        var shell = result.Rows.Single(r => r.Description == "SHELL OIL 5578");
+        Assert.Null(shell.CategoryId);
+        Assert.Equal(NeedWant.Need, shell.NeedWant);
+        Assert.Equal(["starts with SHELL"], shell.ClassifiedBy);
+
         Assert.Equal(5, result.WillImportCount);
         Assert.Equal(2, result.ClassifiedCount);
+        // Trader Joe's, Shell and the autopay: a row is for review while it has no category.
         Assert.Equal(3, result.ForReviewCount);
+    }
+
+    [Fact]
+    public async Task Read_AfterARuleIsWritten_ReadsTheFileThroughItWithoutReUploading()
+    {
+        var client = await LoggedInClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Fresh Rules {Guid.NewGuid():N}");
+        var groceries = await CreateCategoryAsync(client, $"Groceries {Guid.NewGuid():N}");
+        var preview = await UploadOkAsync(client, accountId, "assignment-match.csv");
+        var before = await ReadOkAsync(client, preview.Token, Mapping());
+
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "KROGER", IgnoreMatchType.Contains, groceries, NeedWant.Need, []));
+        var after = await ReadOkAsync(client, preview.Token, Mapping());
+
+        Assert.Equal(0, before.ClassifiedCount);
+        Assert.Equal(1, after.ClassifiedCount);
+        Assert.Equal(groceries, after.Rows.Single(r => r.Description == "KROGER #442").CategoryId);
     }
 
     [Fact]

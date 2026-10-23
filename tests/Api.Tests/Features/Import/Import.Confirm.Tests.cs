@@ -350,6 +350,24 @@ public class ConfirmTests : IClassFixture<BudgetApiFactory>
     }
 
     [Fact]
+    public async Task Confirm_AppliesARuleWrittenAfterTheFileWasUploaded()
+    {
+        var client = await LoggedInClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Assign Late {Guid.NewGuid():N}");
+        var groceries = await CreateCategoryAsync(client, $"Groceries {Guid.NewGuid():N}");
+        await SaveMappingAsync(client, accountId, SignedAmountMapping());
+        var preview = await UploadOkAsync(client, accountId, "assignment-match.csv");
+
+        // Rules are read when the import runs, not when the file arrived.
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "KROGER", IgnoreMatchType.Contains, groceries, NeedWant.Need, []));
+        await ConfirmOkAsync(client, preview.Token);
+
+        var kroger = (await TransactionsOnAsync(client, accountId)).Single(t => t.Description == "KROGER #442");
+        Assert.Equal(groceries, kroger.CategoryId);
+    }
+
+    [Fact]
     public async Task Confirm_ARuleScopedToAnotherAccount_DoesNotTouchThisImport()
     {
         var client = await LoggedInClientAsync(_factory);
