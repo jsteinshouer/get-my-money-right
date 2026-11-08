@@ -78,7 +78,7 @@ Aug 16   Trader Joe's #221                 −63.40
 Aug 17   Shell Oil 5578                    −41.02
          GROCERIES · NEED · your correction
 ═══════════════════════════════════════════════════
-38 classified · 6 for review · 3 skipped · 2 duplicates
+38 categorized by a rule · 6 for review · 3 skipped · 2 duplicates
 ```
 
 **One device, four states.** The second line is the same tracked-caps register #9 established for
@@ -91,8 +91,17 @@ mark. Four forms, and no fifth:
 | Classified by rules | `GROCERIES · NEED · contains KROGER` |
 | Classified, several rules contributed | assignments, then `· 2 rules` |
 | Nothing matched | `NO CATEGORY · WANT · for review` |
+| A rule judged it but gave no category | `NO CATEGORY · NEED · for review · starts with SQ *` — the nothing-matched form with its citation filled, not a fifth form |
 | Skipped | `SKIPPED · contains AUTOPAY` (unchanged from #9) |
 | Corrected by hand | assignments, then `· your correction` in `--signal` |
+
+**One order for every form** (amended 2026-11-08, after the ticket 14 critique): the marks —
+category, Need/Want, tags — then the status (`for review`), then the citation, always last, so a
+rule is never read as the cause of a review. The marks are set in tracked caps and the status and
+citation as written, which is what keeps the filing and its reason legible as two things on one
+line. The line runs the row's full width; a separator is glued to the part after it, so a wrapped
+line never ends on a dangling `·`. The same counts print once in the reading's head, as a plain
+line beside the file name, so a long file needs no scrolling to be trusted.
 
 Tags print as `+VACATION 2026` in the same register, after the Need/Want. **Colour stays
 quarantined**: the line is achromatic in every form but the correction mark, which is the one place
@@ -160,7 +169,7 @@ double rule with the counts as `.exceptions` entries, then the action:
 
 ```
 ═══════════════════════════════════════════════════
-  38 classified                                 38
+  38 categorized by a rule                      38
   for review                                     6
   skipped by a rule                              3
   already imported                               2
@@ -231,16 +240,18 @@ beyond the strike's curve; a confirmation dialog on Import.
 5–25.
 
 - **No assignment rules yet** (the state on day one) — every row reads `NO CATEGORY · WANT · for
-  review` and the tally reads `0 classified · 44 for review`. This is not an error and must not be
+  review` and the tally reads `0 categorized by a rule · 44 for review`. This is not an error and must not be
   dressed as one. The classify section's empty state names where rules come from: *"No rules yet.
   Write one from a row in an import preview."*
 - **Rules exist but match nothing in this file** — silent. A rule that matched nothing is not worth
   a line of the household's attention on this screen.
-- **Every row classified** — `44 classified · 0 for review`. The review memo after import does not
+- **Every row classified** — `44 categorized by a rule · 0 for review`. The review memo after import does not
   print when the count is zero.
 - **A rule and an ignore rule both match a row** — the strike wins and no assignments print; the
   row is leaving either way, and two outcomes would read as a contradiction.
 - **A duplicate row that rules also classified** — duplicate mark wins in the same way.
+- **Nothing left to write** — every row skipped or already imported: the Import button does not
+  print at all, and *Choose another file* becomes the primary action.
 - **A row that fails to parse** — unchanged from #9: the error prints, no assignments, no slip
   branch for classification (there is nothing to classify), but the rule branches stay reachable.
 - **Rule saved that matches zero rows** — the save succeeds, the tally does not move, and a

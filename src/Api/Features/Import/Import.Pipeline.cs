@@ -6,7 +6,7 @@ namespace Api.Features.Import;
 public static partial class Import
 {
     /// <summary>
-    /// The import pipeline up to the point of writing: map → ignore → dedupe. Station 3's preview
+    /// The import pipeline up to the point of writing: map → ignore → dedupe → assign. Station 3's preview
     /// and the confirm both read a file through this one class, because a preview that decides a
     /// row's fate differently from the import is a preview nobody can trust.
     /// </summary>
@@ -24,6 +24,8 @@ public static partial class Import
         /// One row's fate. <paramref name="CaughtBy"/> is set only for <see cref="Outcome.Ignored"/>,
         /// <paramref name="Error"/> only for <see cref="Outcome.Unreadable"/>: the pipeline is
         /// terminal at each step, so a row carries exactly one reason for leaving.
+        /// <paramref name="Assigned"/> is set on every row that is going in — how it will be written —
+        /// and on no other: a row that is leaving is never classified.
         /// </summary>
         public record class Row(
             DateOnly? Date,
@@ -31,7 +33,8 @@ public static partial class Import
             decimal? Amount,
             Outcome Outcome,
             ImportIgnoreRule? CaughtBy,
-            string? Error);
+            string? Error,
+            Assignment? Assigned = null);
 
         private readonly BudgetDbContext _db;
 
@@ -83,7 +86,43 @@ public static partial class Import
                 }
             }
 
-            return await MarkDuplicatesAsync(accountId, rows, cancellationToken);
+            rows = await MarkDuplicatesAsync(accountId, rows, cancellationToken);
+            return await AssignAsync(accountId, rows, cancellationToken);
+        }
+
+        /// <summary>
+        /// The last step before writing: every row still going in, read through the assignment rules
+        /// in force — global ones and this account's, fresh on every request like the ignore rules.
+        /// </summary>
+        private async Task<List<Row>> AssignAsync(int accountId, List<Row> rows, CancellationToken cancellationToken)
+        {
+            if (!rows.Any(r => r.Outcome == Outcome.Import))
+            {
+                return rows;
+            }
+
+            var rules = await _db.ImportAssignmentRules
+                .AsNoTracking()
+                .Where(r => r.IsActive && (r.AccountId == null || r.AccountId == accountId))
+                .OrderBy(r => r.Id)
+                .ToListAsync(cancellationToken);
+
+            var ruleIds = rules.Select(r => r.Id).ToList();
+            var tagsByRule = (await _db.ImportAssignmentRuleTags
+                    .AsNoTracking()
+                    .Where(rt => ruleIds.Contains(rt.RuleId))
+                    .OrderBy(rt => rt.TagId)
+                    .ToListAsync(cancellationToken))
+                .ToLookup(rt => rt.RuleId, rt => rt.TagId);
+            var inForce = rules
+                .Select(r => new AssignmentRuleInForce(r, tagsByRule[r.Id].ToList()))
+                .ToList();
+
+            return rows
+                .Select(row => row.Outcome == Outcome.Import
+                    ? row with { Assigned = AssignmentResolution.Resolve(inForce, row.Description) }
+                    : row)
+                .ToList();
         }
 
         /// <summary>
