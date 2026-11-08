@@ -70,8 +70,8 @@ test('importing a statement writes its rows uncategorized, and re-importing it s
   await page.getByRole('button', { name: 'Add rule' }).click()
   await expect(entry(page, 'AUTOPAY THANK YOU')).toContainText('Skipped · contains AUTOPAY')
   await expectTally(page, 3, 1, 0)
-  // The guess is said before it is made: nothing files these rows, so they arrive as Wants.
-  await expect(page.getByText('Each lands with no category, as a Want unless a rule said otherwise, until someone files them.')).toBeVisible()
+  // What the count means is said before the import: nothing files these rows, so they join the queue.
+  await expect(page.getByText('These 3 rows land with no category and join the review queue.')).toBeVisible()
   // Focus returns to the row the rule was written from, now carrying its strike.
   await expect(entry(page, 'AUTOPAY THANK YOU')).toBeFocused()
 

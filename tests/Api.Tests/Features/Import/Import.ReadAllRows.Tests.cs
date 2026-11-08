@@ -273,7 +273,7 @@ public class ReadAllRowsTests : IClassFixture<BudgetApiFactory>
         Assert.Equal(["starts with SHELL"], shell.ClassifiedBy);
 
         Assert.Equal(5, result.WillImportCount);
-        Assert.Equal(2, result.ClassifiedCount);
+        Assert.Equal(2, result.CategorizedCount);
         // Trader Joe's, Shell and the autopay: a row is for review while it has no category.
         Assert.Equal(3, result.ForReviewCount);
     }
@@ -291,8 +291,8 @@ public class ReadAllRowsTests : IClassFixture<BudgetApiFactory>
             accountId, "KROGER", IgnoreMatchType.Contains, groceries, NeedWant.Need, []));
         var after = await ReadOkAsync(client, preview.Token, Mapping());
 
-        Assert.Equal(0, before.ClassifiedCount);
-        Assert.Equal(1, after.ClassifiedCount);
+        Assert.Equal(0, before.CategorizedCount);
+        Assert.Equal(1, after.CategorizedCount);
         Assert.Equal(groceries, after.Rows.Single(r => r.Description == "KROGER #442").CategoryId);
     }
 
@@ -311,7 +311,7 @@ public class ReadAllRowsTests : IClassFixture<BudgetApiFactory>
             Assert.Equal(NeedWant.Want, row.NeedWant);
             Assert.Empty(row.ClassifiedBy);
         });
-        Assert.Equal(0, result.ClassifiedCount);
+        Assert.Equal(0, result.CategorizedCount);
         Assert.Equal(5, result.ForReviewCount);
     }
 
@@ -346,7 +346,7 @@ public class ReadAllRowsTests : IClassFixture<BudgetApiFactory>
         var shell = again.Rows.Single(r => r.Description == "SHELL OIL 5578");
         Assert.True(shell.IsDuplicate);
         AssertNoAssignments(shell);
-        Assert.Equal(0, again.ClassifiedCount);
+        Assert.Equal(0, again.CategorizedCount);
         Assert.Equal(0, again.ForReviewCount);
 
         // Unreadable: there is nothing to classify until it can be read.

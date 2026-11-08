@@ -39,7 +39,7 @@ async function openRulesPage(page: Page) {
 
 async function expectTally(page: Page, classified: number, forReview: number) {
   const tally = page.locator('.exceptions')
-  await expect(tally.locator('.exception', { hasText: 'Classified' })).toContainText(String(classified))
+  await expect(tally.locator('.exception', { hasText: 'Categorized by a rule' })).toContainText(String(classified))
   await expect(tally.locator('.exception', { hasText: 'For review' })).toContainText(String(forReview))
 }
 
@@ -116,13 +116,19 @@ test('rules classify the preview, and the import writes what the preview said', 
     `${travel} · Want · +${vacation} · 2 rules`,
   )
   await expect(entry(page, "TRADER JOE'S #221").locator('.preview-filed')).toHaveText('No category · Want · for review')
-  // Judged but not filed: it cites its rule, and is still for review until it has a category.
+  // Judged but not filed: still for review until it has a category, then the rule that judged it —
+  // last, as in every form, so it does not read as the cause of the review.
   await expect(entry(page, 'SQ *BLUE BOTTLE').locator('.preview-filed')).toHaveText(
-    'No category · Need · starts with SQ * · for review',
+    'No category · Need · for review · starts with SQ *',
   )
 
   await expectTally(page, 2, 2)
-  await expect(page.getByText('Each lands with no category, as a Want unless a rule said otherwise')).toBeVisible()
+  // The same counts at the head of the reading, so a long file needs no scrolling to be trusted.
+  await expect(page.locator('.reading-count')).toHaveText(
+    '2 categorized by a rule · 2 for review · 0 skipped · 0 already imported',
+  )
+  await expect(page.getByRole('heading', { name: 'Before you import' })).toBeAttached()
+  await expect(page.getByText('These 2 rows land with no category and join the review queue.')).toBeVisible()
 
   await page.getByRole('button', { name: 'Import 4 rows' }).click()
   await expect(page.getByRole('status')).toHaveText('Imported 4 · skipped 0 by a rule · skipped 0 as duplicates')
@@ -163,6 +169,9 @@ test('rules classify the preview, and the import writes what the preview said', 
   await expect(autopay).toContainText('Skipped · contains AUTOPAY')
   await expect(autopay.locator('.preview-filed')).toHaveCount(0)
   await expectTally(page, 0, 0)
+  // Nothing left to write, so there is no import to offer: the next file is the action.
+  await expect(page.getByRole('button', { name: /^Import \d/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Choose another file' })).toBeVisible()
 })
 
 test('with no rules every row is for review, and once every row is classified nothing is left waiting', async ({

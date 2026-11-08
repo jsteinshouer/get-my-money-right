@@ -53,7 +53,7 @@ public static partial class Import
 
         public record class Tag(int Id, string Name);
 
-        /// <param name="ClassifiedCount">Rows going in that a rule gives a category.</param>
+        /// <param name="CategorizedCount">Rows going in that a rule gives a category.</param>
         /// <param name="ForReviewCount">Rows going in with no category: the review queue they will join.</param>
         public record class Response(
             List<Row> Rows,
@@ -61,7 +61,7 @@ public static partial class Import
             int SkippedCount,
             int DuplicateCount,
             int ErrorCount,
-            int ClassifiedCount,
+            int CategorizedCount,
             int ForReviewCount);
 
         public class Validator : AbstractValidator<Command>

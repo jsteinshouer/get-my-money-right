@@ -25,7 +25,9 @@ import {
   type MappingDraft,
   type PreviewRow,
   type Reading,
+  type SecondLine,
   type UploadPreview,
+  UPLOAD_NOT_HELD,
 } from '../api/import'
 import { transactionsApi } from '../api/transactions'
 import { IgnoreRuleForm } from '../components/IgnoreRuleForm'
@@ -72,6 +74,42 @@ function readableTimestamp(iso: string): string {
   return readableDate(iso.slice(0, 10))
 }
 
+/** Why a reading of the held file failed. Only `gone` sends the household back to choose the file. */
+interface ReadFailure {
+  message: string
+  gone: boolean
+}
+
+/**
+ * Names the failure rather than blaming every one on an expired upload: a dropped connection or a
+ * server fault leaves the file held, and the fix is to try again, not to start over.
+ */
+function readFailure(error: unknown): ReadFailure {
+  if (error instanceof ApiError && error.status === 404) {
+    return { message: UPLOAD_NOT_HELD, gone: true }
+  }
+  if (error instanceof ApiError) {
+    return { message: 'The file could not be read just now. Try again.', gone: false }
+  }
+  return { message: 'The app could not be reached. Check the connection, then try again.', gone: false }
+}
+
+/** Why an import wrote nothing, said so the household knows whether trying again is the fix. */
+function importFailure(error: unknown): string {
+  if (!(error instanceof ApiError)) {
+    return 'The import could not reach the server, so nothing was written. Try again.'
+  }
+  if (error.status === 409) {
+    return 'The ledger was busy saving something else, so nothing was written. Try again.'
+  }
+  // The server's own sentence when it refused the file — "2 rows could not be read…" — or the upload
+  // being gone.
+  if (error.status === 400 || error.status === 404) {
+    return error.message
+  }
+  return 'The import failed on the server, so nothing was written. Try again.'
+}
+
 export function ImportPage() {
   const [accounts, setAccounts] = useState<Account[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -85,7 +123,9 @@ export function ImportPage() {
   const [preview, setPreview] = useState<UploadPreview | null>(null)
   const [draft, setDraft] = useState<MappingDraft | null>(null)
   const [reading, setReading] = useState<Reading | null>(null)
-  const [readingError, setReadingError] = useState<string | null>(null)
+  const [readingFailure, setReadingFailure] = useState<ReadFailure | null>(null)
+  /** Bumped by "Try again", so the reading is fetched again for a mapping that has not changed. */
+  const [readingAttempt, setReadingAttempt] = useState(0)
   const [showFormat, setShowFormat] = useState(false)
 
   const [saving, setSaving] = useState(false)
@@ -93,7 +133,8 @@ export function ImportPage() {
   const [savedAt, setSavedAt] = useState<string | null>(null)
 
   const [rows, setRows] = useState<FullPreview | null>(null)
-  const [rowsError, setRowsError] = useState<string | null>(null)
+  const [rowsFailure, setRowsFailure] = useState<ReadFailure | null>(null)
+  const [rereading, setRereading] = useState(false)
   /** Rows a rule has just caught, which draw their stroke rather than arriving already struck. */
   const [justStruck, setJustStruck] = useState<ReadonlySet<number>>(new Set())
   const [slipRow, setSlipRow] = useState<number | null>(null)
@@ -146,7 +187,7 @@ export function ImportPage() {
           return
         }
         setReading(result)
-        setReadingError(null)
+        setReadingFailure(null)
         // Changing the separator or the header flag changes which columns exist at all, so a role
         // pointing at a column this file no longer has is dropped rather than quietly saved.
         setDraft((current) => {
@@ -165,15 +206,15 @@ export function ImportPage() {
           return changed ? next : current
         })
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        // A reading of some other mapping would be misleading, so it goes — but only an upload
+        // that is really gone sends the household back for the file.
         if (readingRequest.current === sequence) {
           setReading(null)
-          setReadingError(
-            'The uploaded file is no longer held for this session. Choose the file again to carry on.',
-          )
+          setReadingFailure(readFailure(error))
         }
       })
-  }, [step, preview, draft])
+  }, [step, preview, draft, readingAttempt])
 
   const selectedAccount = accounts?.find((a) => String(a.id) === accountId) ?? null
 
@@ -186,19 +227,26 @@ export function ImportPage() {
       if (!preview || !draft) {
         return
       }
+      setRereading(true)
       try {
         const result = await importApi.readAllRows(preview.token, draft)
         const before = lastRead.current
         setJustStruck(markNewStrikes && before ? newlyStruck(before, result.rows) : new Set())
         lastRead.current = result.rows
         setRows(result)
-        setRowsError(null)
-      } catch {
-        lastRead.current = null
-        setRows(null)
-        setRowsError(
-          'The uploaded file is no longer held for this session. Choose the file again to carry on.',
-        )
+        setRowsFailure(null)
+      } catch (error) {
+        // The last reading stays on screen unless the upload itself is gone: losing every row to a
+        // dropped connection — just after a rule was saved from one of them — is the worst moment
+        // to make the household start over.
+        const failure = readFailure(error)
+        if (failure.gone) {
+          lastRead.current = null
+          setRows(null)
+        }
+        setRowsFailure(failure)
+      } finally {
+        setRereading(false)
       }
     },
     [preview, draft],
@@ -228,7 +276,7 @@ export function ImportPage() {
       setPreview(result)
       setDraft(draftFrom(result))
       setReading(null)
-      setReadingError(null)
+      setReadingFailure(null)
       setSavedAt(null)
       setSaveError(null)
       setShowFormat(false)
@@ -311,8 +359,8 @@ export function ImportPage() {
       setSaveError(requirement)
       return
     }
-    if (readingError) {
-      setSaveError(readingError)
+    if (readingFailure) {
+      setSaveError(readingFailure.message)
       return
     }
 
@@ -334,13 +382,13 @@ export function ImportPage() {
       setSaveError(requirement)
       return
     }
-    if (readingError) {
-      setSaveError(readingError)
+    if (readingFailure) {
+      setSaveError(readingFailure.message)
       return
     }
     lastRead.current = null
     setRows(null)
-    setRowsError(null)
+    setRowsFailure(null)
     setJustStruck(new Set())
     setSlipRow(null)
     setImportError(null)
@@ -354,7 +402,7 @@ export function ImportPage() {
     setSaveError(null)
     lastRead.current = null
     setRows(null)
-    setRowsError(null)
+    setRowsFailure(null)
     setSlipRow(null)
     setResult(null)
     setImportError(null)
@@ -389,12 +437,7 @@ export function ImportPage() {
       setResult(outcome)
       setSlipRow(null)
     } catch (error) {
-      // The server's own sentence when it refused; a plain one when it could not be reached at all.
-      setImportError(
-        error instanceof ApiError
-          ? error.message
-          : 'The import could not reach the server, so nothing was written. Try again.',
-      )
+      setImportError(importFailure(error))
     } finally {
       setImporting(false)
     }
@@ -573,9 +616,14 @@ export function ImportPage() {
 
           <section className="reading" aria-label="Reads as" aria-live="polite">
             <p className="reading-head">Reads as</p>
-            {readingError ? (
+            {readingFailure ? (
               <p className="reading-error" role="alert">
-                {readingError}
+                {readingFailure.message}{' '}
+                {!readingFailure.gone && (
+                  <button type="button" className="linklike" onClick={() => setReadingAttempt((n) => n + 1)}>
+                    Try again
+                  </button>
+                )}
               </p>
             ) : reading === null ? (
               <p aria-busy="true">Reading…</p>
@@ -633,7 +681,9 @@ export function ImportPage() {
           accountId={preview.accountId}
           fileName={preview.fileName}
           rows={rows}
-          rowsError={rowsError}
+          rowsFailure={rowsFailure}
+          rereading={rereading}
+          onRetry={() => void readRows(true)}
           justStruck={justStruck}
           slipRow={slipRow}
           importing={importing}
@@ -704,6 +754,30 @@ function ReadingLine({ row }: { row: { date: string | null; description: string 
   )
 }
 
+/**
+ * A row's second line: the marks in tracked caps, then the notes as written. Each part after the
+ * first carries its separator, glued with a non-breaking space, so a wrapped line never ends on a
+ * dangling "·" with its reason orphaned below.
+ */
+function SecondLineText({ line, filed = false }: { line: SecondLine; filed?: boolean }) {
+  const parts = [
+    ...line.marks.map((text) => ({ text, note: false })),
+    ...line.notes.map((text) => ({ text, note: true })),
+  ]
+  return (
+    <p className={filed ? 'preview-skip preview-filed' : 'preview-skip'}>
+      {parts.map((part, index) => (
+        <Fragment key={index}>
+          {index > 0 && ' '}
+          <span className={part.note ? 'preview-note' : undefined}>
+            {index > 0 ? `·\u00a0${part.text}` : part.text}
+          </span>
+        </Fragment>
+      ))}
+    </p>
+  )
+}
+
 /** Rows that were not struck the last time the file was read, and are now. */
 function newlyStruck(before: PreviewRow[], after: PreviewRow[]): ReadonlySet<number> {
   const struck = new Set<number>()
@@ -726,7 +800,9 @@ function PreviewStation({
   accountId,
   fileName,
   rows,
-  rowsError,
+  rowsFailure,
+  rereading,
+  onRetry,
   justStruck,
   slipRow,
   importing,
@@ -745,7 +821,9 @@ function PreviewStation({
   accountId: number
   fileName: string
   rows: FullPreview | null
-  rowsError: string | null
+  rowsFailure: ReadFailure | null
+  rereading: boolean
+  onRetry: () => void
   justStruck: ReadonlySet<number>
   slipRow: number | null
   importing: boolean
@@ -772,12 +850,19 @@ function PreviewStation({
     onFocused()
   }, [focusRow, rows, onFocused])
 
-  if (rowsError) {
+  // With nothing to show — the first reading failed, or the upload is gone — the failure is the
+  // whole station. Otherwise it is a note over the last reading, which stays where it was.
+  if (rowsFailure && (rows === null || rowsFailure.gone)) {
     return (
       <>
-        <p role="alert">{rowsError}</p>
+        <p role="alert">{rowsFailure.message}</p>
         <div className="step-actions">
-          <button type="button" onClick={onStartOver}>
+          {!rowsFailure.gone && (
+            <button type="button" onClick={onRetry} disabled={rereading} aria-busy={rereading || undefined}>
+              Try again
+            </button>
+          )}
+          <button type="button" className={rowsFailure.gone ? undefined : 'secondary'} onClick={onStartOver}>
             Choose another file
           </button>
         </div>
@@ -795,10 +880,33 @@ function PreviewStation({
 
   return (
     <>
+      {rowsFailure && (
+        <p className="note" data-signal="true" role="alert">
+          {rowsFailure.message} The rows below are as the file read last time.{' '}
+          <button
+            type="button"
+            className="linklike"
+            onClick={onRetry}
+            disabled={rereading}
+            aria-busy={rereading || undefined}
+          >
+            Try again
+          </button>
+        </p>
+      )}
+
       <section className="reading" aria-label="Preview" ref={readingRef}>
         <p className="reading-head">
           {imported ? 'Every row, as it was read' : 'Every row, as it will be read'}
           <span className="reading-file">{fileName}</span>
+          {/* The tally, said once where the reading starts: a long file's counts are otherwise
+              hundreds of rows below, and a re-import should need no scrolling to trust. */}
+          {!imported && (
+            <span className="reading-count">
+              {rows.categorizedCount} categorized by a rule · {rows.forReviewCount} for review · {rows.skippedCount}{' '}
+              skipped · {rows.duplicateCount} already imported
+            </span>
+          )}
         </p>
 
         {rows.rows.map((row, index) => {
@@ -834,14 +942,16 @@ function PreviewStation({
 
                 {/* Real text, not an ARIA label: the reason is read by everybody, and it names the
                     rule that caught the row so an over-broad one is diagnosable at a glance. */}
-                {row.skippedReason !== null && <p className="preview-skip">Skipped · {row.skippedReason}</p>}
+                {row.skippedReason !== null && (
+                  <SecondLineText line={{ marks: ['Skipped'], notes: [row.skippedReason] }} />
+                )}
                 {/* How a row going in will be filed, and the rule that decided it — in the strike
                     reason's register, real text for everybody. A row nobody has taught the app about
                     says so rather than staying bare: its Want is a guess, made in the open. */}
-                {filed !== null && <p className="preview-skip preview-filed">{filed}</p>}
+                {filed !== null && <SecondLineText line={filed} filed />}
                 {/* Not struck: the pen stroke means a rule caught the row, and no rule did. The row is
                     already in the ledger, and says so in the same register. */}
-                {row.isDuplicate && <p className="preview-skip">Already imported</p>}
+                {row.isDuplicate && <SecondLineText line={{ marks: ['Already imported'], notes: [] }} />}
                 {row.error !== null && <p className="preview-problem">{row.error}</p>}
               </div>
 
@@ -879,13 +989,17 @@ function PreviewStation({
           onStartOver={onStartOver}
         />
       ) : (
-        <>
+        <section aria-labelledby="import-close-heading">
+          {/* A heading to jump to: on a long file the close is hundreds of rows below the head. */}
+          <h3 id="import-close-heading" className="visually-hidden">
+            Before you import
+          </h3>
           {/* Entries, the way a ledger closes a figure: what the rules filed, what they left for a
               person, and what is not going in at all. */}
           <div className="exceptions">
             <div className="exception">
-              <span className="exception-label">Classified</span>
-              <span className="exception-count num">{rows.classifiedCount}</span>
+              <span className="exception-label">Categorized by a rule</span>
+              <span className="exception-count num">{rows.categorizedCount}</span>
             </div>
             <div className="exception">
               <span className="exception-label">For review</span>
@@ -901,20 +1015,20 @@ function PreviewStation({
             </div>
           </div>
 
-          {/* The guess, made in the open: no rule has filed these rows, so they arrive with no
-              category — and as a Want, unless a rule judged them — until a person says otherwise
-              (ADR-0001). */}
+          {/* What the count means for the monthly session. Each row already says its own Need/Want,
+              so the note does not repeat the guess (ADR-0001). */}
           {rows.forReviewCount > 0 && (
             <p className="close-note">
-              {rows.forReviewCount === 1 ? 'It lands' : 'Each lands'} with no category, as a Want unless a rule said
-              otherwise, until someone files {rows.forReviewCount === 1 ? 'it' : 'them'}.
+              {rows.forReviewCount === 1
+                ? 'It lands with no category and joins the review queue.'
+                : `These ${rows.forReviewCount} rows land with no category and join the review queue.`}
             </p>
           )}
 
           {/* One sentence for assistive technology, rather than three figures each announced alone
               as a rule re-counts them. */}
           <p className="visually-hidden" aria-live="polite">
-            {rows.classifiedCount} classified, {rows.forReviewCount} for review, {rows.skippedCount} skipped by a rule,{' '}
+            {rows.categorizedCount} categorized by a rule, {rows.forReviewCount} for review, {rows.skippedCount} skipped by a rule,{' '}
             {rows.duplicateCount} already imported.
           </p>
 
@@ -951,25 +1065,33 @@ function PreviewStation({
             </p>
           )}
 
+          {/* With nothing to write there is no import to offer — "Import 0 rows" is a button that
+              can only refuse — so the next file becomes the action. */}
           <div className="step-actions">
-            <button
-              type="button"
-              onClick={onImport}
-              disabled={importing || rows.errorCount > 0 || rows.willImportCount === 0}
-              aria-busy={importing || undefined}
-            >
-              {importing
-                ? 'Importing…'
-                : `Import ${rows.willImportCount} ${rows.willImportCount === 1 ? 'row' : 'rows'}`}
-            </button>
+            {rows.willImportCount > 0 && (
+              <button
+                type="button"
+                onClick={onImport}
+                disabled={importing || rows.errorCount > 0}
+                aria-busy={importing || undefined}
+              >
+                {importing
+                  ? 'Importing…'
+                  : `Import ${rows.willImportCount} ${rows.willImportCount === 1 ? 'row' : 'rows'}`}
+              </button>
+            )}
             <button type="button" className="secondary" onClick={onBack}>
               Back to the mapping
             </button>
-            <button type="button" className="secondary" onClick={onStartOver}>
+            <button
+              type="button"
+              className={rows.willImportCount > 0 ? 'secondary' : undefined}
+              onClick={onStartOver}
+            >
               Choose another file
             </button>
           </div>
-        </>
+        </section>
       )}
     </>
   )

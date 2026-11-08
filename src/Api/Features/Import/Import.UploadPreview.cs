@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using Api.Data;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -52,7 +53,7 @@ public static partial class Import
             }
 
             public async Task<Results<Ok<Response>, NotFound, ValidationProblem>> HandleAsync(
-                int accountId, IFormFile? file, CancellationToken cancellationToken)
+                int accountId, string uploadedByUserId, IFormFile? file, CancellationToken cancellationToken)
             {
                 if (file is null || file.Length == 0)
                 {
@@ -120,7 +121,7 @@ public static partial class Import
                     ? saved!.DateFormat
                     : Csv.DetectDateFormat(dataRecords);
 
-                var token = _cache.Add(accountId, file.FileName, text);
+                var token = _cache.Add(accountId, uploadedByUserId, file.FileName, text);
 
                 return TypedResults.Ok(new Response(
                     token,
@@ -180,8 +181,10 @@ public static partial class Import
         endpoints.MapPost("/preview", async (
                 [FromForm] int accountId,
                 IFormFile? file,
+                ClaimsPrincipal user,
                 UploadPreview.Handler handler,
-                CancellationToken ct) => await handler.HandleAsync(accountId, file, ct))
+                CancellationToken ct) =>
+                await handler.HandleAsync(accountId, user.FindFirstValue(ClaimTypes.NameIdentifier)!, file, ct))
             // The app has no antiforgery middleware (LAN-only, cookie auth, same-origin SPA), and a
             // form-accepting endpoint refuses to run without one unless it opts out explicitly.
             .DisableAntiforgery();

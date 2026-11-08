@@ -461,6 +461,9 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
   position: relative;
 }
 
+/* The rules memo sits over the band at every step; it needs air, or it reads as the band's caption. */
+.memo + .stations { margin-top: var(--gap-4); }
+
 .stations::after {
   content: '';
   position: absolute;
@@ -618,6 +621,17 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
   color: var(--ink-2);
 }
 
+/* The tally said once at the head of the reading, as a plain line beside the file's name. */
+.reading-count {
+  flex-basis: 100%;
+  font-size: 0.8rem;
+  font-weight: 500;
+  font-stretch: 100%;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
+}
+
 /* The guess the tally is about to make, said once under it in the register of a note. */
 .close-note {
   margin-top: var(--gap-2);
@@ -704,8 +718,10 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
 }
 
 /* The row's second line: why it is leaving, or how it will be filed. It is the row's meaning, so on a
-   narrow screen it wraps — even inside a long payee or rule — rather than hiding behind an ellipsis. */
+   narrow screen it wraps — even inside a long payee or rule — rather than hiding behind an ellipsis.
+   On a desk it runs the row's width: the paragraph measure would fold it at a third of the row. */
 .preview-skip {
+  max-width: none;
   overflow-wrap: anywhere;
   margin-top: 0.15rem;
   padding-left: calc(7.5rem + var(--gap-4));
@@ -715,6 +731,16 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
   letter-spacing: 0.11em;
   text-transform: uppercase;
   color: var(--ink-3);
+}
+
+/* The why after the what — "for review", "contains KROGER", "2 rules" — set as written rather than
+   in caps, so the filing and its reason read as two things on one line. */
+.preview-note {
+  font-size: 0.78rem;
+  font-weight: 500;
+  font-stretch: 100%;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 /* A row that could not be read keeps its figures and its controls — the problem is said beneath
@@ -857,19 +883,25 @@ a.entry:hover .entry-name { text-decoration: underline; text-decoration-color: v
   .reading-amount { text-align: left; }
 
   /* Import is desk work, but the page still never scrolls sideways: the entry stacks, and the
-     stroke goes with it — one hairline across the whole stacked entry rather than three. */
-  .preview-line,
-  .preview-entry[data-skipped='true'] .preview-line {
+     stroke goes with it — one hairline across the whole stacked entry rather than three. The line's
+     box dissolves into the entry's grid so the row's own second line sits under its figures, and the
+     control comes after it — not between the amount and the line, reading as the button's caption. */
+  .preview-entry {
+    display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--gap-1);
+    row-gap: var(--gap-1);
   }
+
+  .preview-line,
+  .preview-entry[data-skipped='true'] .preview-line { display: contents; }
 
   /* Column and row together, per child: the desktop rules place each child by name, and a bare
      `.preview-line > *` is too weak to move them back into the single column. */
   .preview-line > .reading-date { grid-row: 1; grid-column: 1; }
   .preview-line > .reading-description { grid-row: 2; grid-column: 1; }
   .preview-line > .reading-amount { grid-row: 3; grid-column: 1; }
-  .preview-line > .preview-rule-open { grid-row: 4; grid-column: 1; }
+  /* Auto-placed after the second lines, which follow the figures in source order. */
+  .preview-line > .preview-rule-open { grid-row: auto; grid-column: 1; order: 1; }
 
   .preview-rule-open { justify-self: start; margin-top: var(--gap-2); }
   .preview-skip, .preview-problem { padding-left: 0; }
