@@ -125,7 +125,7 @@ test('rules classify the preview, and the import writes what the preview said', 
   await expectTally(page, 2, 2)
   // The same counts at the head of the reading, so a long file needs no scrolling to be trusted.
   await expect(page.locator('.reading-count')).toHaveText(
-    '2 categorized by a rule · 2 for review · 0 skipped · 0 already imported',
+    '2 categorized by a rule · 2 for review · 0 skipped by a rule · 0 already imported',
   )
   await expect(page.getByRole('heading', { name: 'Before you import' })).toBeAttached()
   await expect(page.getByText('These 2 rows land with no category and join the review queue.')).toBeVisible()

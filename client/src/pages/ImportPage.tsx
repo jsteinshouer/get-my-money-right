@@ -74,7 +74,10 @@ function readableTimestamp(iso: string): string {
   return readableDate(iso.slice(0, 10))
 }
 
-/** Why a reading of the held file failed. Only `gone` sends the household back to choose the file. */
+/**
+ * Why a reading of the held file failed. Only `gone` sends the household back to choose the file;
+ * otherwise a Try again sits beside the message, so the message does not say it too.
+ */
 interface ReadFailure {
   message: string
   gone: boolean
@@ -89,9 +92,9 @@ function readFailure(error: unknown): ReadFailure {
     return { message: UPLOAD_NOT_HELD, gone: true }
   }
   if (error instanceof ApiError) {
-    return { message: 'The file could not be read just now. Try again.', gone: false }
+    return { message: 'The file could not be read just now.', gone: false }
   }
-  return { message: 'The app could not be reached. Check the connection, then try again.', gone: false }
+  return { message: 'The app could not be reached. Check the connection.', gone: false }
 }
 
 /** Why an import wrote nothing, said so the household knows whether trying again is the fix. */
@@ -168,6 +171,8 @@ export function ImportPage() {
 
   /** The row a rule was just written from: focus returns there once the file re-reads. */
   const [focusRow, setFocusRow] = useState<number | null>(null)
+  /** The row a rule was written from when the re-read after it failed: the failure is said there too. */
+  const [rereadRow, setRereadRow] = useState<number | null>(null)
 
   const readingRequest = useRef(0)
   /** What the file read as last time, so a row that has just been struck can draw its stroke. */
@@ -223,9 +228,9 @@ export function ImportPage() {
    * re-reads, so a rule written or deleted elsewhere is applied rather than remembered.
    */
   const readRows = useCallback(
-    async (markNewStrikes = false) => {
+    async (markNewStrikes = false): Promise<boolean> => {
       if (!preview || !draft) {
-        return
+        return false
       }
       setRereading(true)
       try {
@@ -235,6 +240,8 @@ export function ImportPage() {
         lastRead.current = result.rows
         setRows(result)
         setRowsFailure(null)
+        setRereadRow(null)
+        return true
       } catch (error) {
         // The last reading stays on screen unless the upload itself is gone: losing every row to a
         // dropped connection — just after a rule was saved from one of them — is the worst moment
@@ -245,6 +252,7 @@ export function ImportPage() {
           setRows(null)
         }
         setRowsFailure(failure)
+        return false
       } finally {
         setRereading(false)
       }
@@ -445,9 +453,26 @@ export function ImportPage() {
 
   /** No confirmation line: the row striking itself and the tally re-counting is the confirmation. */
   async function handleRuleSaved() {
-    setFocusRow(slipRow)
+    const row = slipRow
+    setFocusRow(row)
     setSlipRow(null)
-    await readRows(true)
+    if (!(await readRows(true))) {
+      setRereadRow(row)
+    }
+  }
+
+  /**
+   * The Try again control disappears with the failure it answered, so focus goes where the work is:
+   * the row the rule was written from, or the step's heading when the first reading failed.
+   */
+  async function retryRows() {
+    if (await readRows(true)) {
+      if (rereadRow !== null) {
+        setFocusRow(rereadRow)
+      } else {
+        stepHeading.current?.focus()
+      }
+    }
   }
 
   return (
@@ -683,7 +708,8 @@ export function ImportPage() {
           rows={rows}
           rowsFailure={rowsFailure}
           rereading={rereading}
-          onRetry={() => void readRows(true)}
+          rereadRow={rereadRow}
+          onRetry={() => void retryRows()}
           justStruck={justStruck}
           slipRow={slipRow}
           importing={importing}
@@ -802,6 +828,7 @@ function PreviewStation({
   rows,
   rowsFailure,
   rereading,
+  rereadRow,
   onRetry,
   justStruck,
   slipRow,
@@ -823,6 +850,7 @@ function PreviewStation({
   rows: FullPreview | null
   rowsFailure: ReadFailure | null
   rereading: boolean
+  rereadRow: number | null
   onRetry: () => void
   justStruck: ReadonlySet<number>
   slipRow: number | null
@@ -875,6 +903,9 @@ function PreviewStation({
   }
 
   const reasons = [...new Set(rows.rows.map((row) => row.skippedReason).filter((r) => r !== null))]
+  // The last reading is on screen but the file has not read since — a rule may have changed it — so
+  // its counts are not a promise the import can keep.
+  const stale = rowsFailure !== null
   // Once the file is written it is no longer held, so there is nothing left to write a rule against.
   const imported = result !== null
 
@@ -882,7 +913,7 @@ function PreviewStation({
     <>
       {rowsFailure && (
         <p className="note" data-signal="true" role="alert">
-          {rowsFailure.message} The rows below are as the file read last time.{' '}
+          {rowsFailure.message} The rows and counts below are as the file read last time.{' '}
           <button
             type="button"
             className="linklike"
@@ -903,8 +934,9 @@ function PreviewStation({
               hundreds of rows below, and a re-import should need no scrolling to trust. */}
           {!imported && (
             <span className="reading-count">
+              {stale && 'As last read: '}
               {rows.categorizedCount} categorized by a rule · {rows.forReviewCount} for review · {rows.skippedCount}{' '}
-              skipped · {rows.duplicateCount} already imported
+              skipped by a rule · {rows.duplicateCount} already imported
             </span>
           )}
         </p>
@@ -953,6 +985,22 @@ function PreviewStation({
                     already in the ledger, and says so in the same register. */}
                 {row.isDuplicate && <SecondLineText line={{ marks: ['Already imported'], notes: [] }} />}
                 {row.error !== null && <p className="preview-problem">{row.error}</p>}
+                {/* Said where the rule was written from, as well as over the reading: focus comes
+                    back to this row, and on a long file the note above is far out of sight. */}
+                {stale && rereadRow === index && (
+                  <p className="preview-problem">
+                    The rule is saved, but the file has not been read through it yet. {rowsFailure.message}{' '}
+                    <button
+                      type="button"
+                      className="linklike"
+                      onClick={onRetry}
+                      disabled={rereading}
+                      aria-busy={rereading || undefined}
+                    >
+                      Try again
+                    </button>
+                  </p>
+                )}
               </div>
 
               {!imported && slipRow === index && (
@@ -1017,6 +1065,12 @@ function PreviewStation({
 
           {/* What the count means for the monthly session. Each row already says its own Need/Want,
               so the note does not repeat the guess (ADR-0001). */}
+          {stale && (
+            <p className="close-note">
+              These counts are as the file read last time. Read it again before importing.
+            </p>
+          )}
+
           {rows.forReviewCount > 0 && (
             <p className="close-note">
               {rows.forReviewCount === 1
@@ -1068,11 +1122,16 @@ function PreviewStation({
           {/* With nothing to write there is no import to offer — "Import 0 rows" is a button that
               can only refuse — so the next file becomes the action. */}
           <div className="step-actions">
+            {rows.willImportCount === 0 && (
+              <button type="button" onClick={onStartOver}>
+                Choose another file
+              </button>
+            )}
             {rows.willImportCount > 0 && (
               <button
                 type="button"
                 onClick={onImport}
-                disabled={importing || rows.errorCount > 0}
+                disabled={importing || rows.errorCount > 0 || stale}
                 aria-busy={importing || undefined}
               >
                 {importing
@@ -1083,13 +1142,11 @@ function PreviewStation({
             <button type="button" className="secondary" onClick={onBack}>
               Back to the mapping
             </button>
-            <button
-              type="button"
-              className={rows.willImportCount > 0 ? 'secondary' : undefined}
-              onClick={onStartOver}
-            >
-              Choose another file
-            </button>
+            {rows.willImportCount > 0 && (
+              <button type="button" className="secondary" onClick={onStartOver}>
+                Choose another file
+              </button>
+            )}
           </div>
         </section>
       )}

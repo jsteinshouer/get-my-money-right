@@ -63,19 +63,32 @@ test('a re-read that fails keeps the last reading on screen, and trying again re
   await page.getByRole('button', { name: 'Add rule' }).click()
 
   // Said for what it is, over the rows as they last read — nobody is sent back for the file.
-  await expect(page.getByRole('alert')).toContainText(
-    'The file could not be read just now. Try again. The rows below are as the file read last time.',
+  await expect(page.getByRole('alert')).toHaveText(
+    'The file could not be read just now. The rows and counts below are as the file read last time. Try again',
   )
   await expect(entry(page, 'KROGER #442')).toBeVisible()
-  await expect(entry(page, 'AUTOPAY THANK YOU')).not.toContainText('Skipped')
-  await expect(page.getByRole('button', { name: 'Choose another file' })).toBeVisible()
+  const autopay = entry(page, 'AUTOPAY THANK YOU')
+  await expect(autopay).not.toContainText('Skipped')
+  // And said again where focus came back to — the row the rule was written from.
+  await expect(autopay).toBeFocused()
+  await expect(autopay.locator('.preview-problem')).toContainText(
+    'The rule is saved, but the file has not been read through it yet.',
+  )
+
+  // The counts no longer describe what the import would write, so the import is not offered on them.
+  await expect(page.locator('.reading-count')).toContainText('As last read:')
+  await expect(page.getByText('These counts are as the file read last time. Read it again before importing.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Import 3 rows' })).toBeDisabled()
 
   await page.unroute(READ_ALL_ROWS)
-  await page.getByRole('button', { name: 'Try again', exact: true }).click()
+  await autopay.getByRole('button', { name: 'Try again' }).click()
 
-  // The rule saved before the fault applies once the file reads again.
-  await expect(entry(page, 'AUTOPAY THANK YOU')).toContainText('Skipped · contains AUTOPAY')
+  // The rule saved before the fault applies once the file reads again, and focus returns to its row.
+  await expect(autopay).toContainText('Skipped · contains AUTOPAY')
+  await expect(autopay).toBeFocused()
   await expect(page.getByText('as the file read last time')).toHaveCount(0)
+  await expect(page.locator('.reading-count')).not.toContainText('As last read')
+  await expect(page.getByRole('button', { name: 'Import 2 rows' })).toBeEnabled()
 })
 
 test('an upload that is no longer held says why, and offers only a new file', async ({ page }) => {
@@ -109,7 +122,7 @@ test('the Map step names an unreachable app, and trying again reads the sample',
 
   const readsAs = page.getByRole('region', { name: 'Reads as' })
   await expect(readsAs.getByRole('alert')).toContainText(
-    'The app could not be reached. Check the connection, then try again.',
+    'The app could not be reached. Check the connection.',
   )
 
   await page.unroute(READING)
