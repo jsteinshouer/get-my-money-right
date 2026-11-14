@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using static Api.Features.Budgets.Budgets;
 using CategoriesFeature = Api.Features.Categories.Categories;
+using ImportFeature = Api.Features.Import.Import;
 using TagsFeature = Api.Features.Tags.Tags;
 using TransactionsFeature = Api.Features.Transactions.Transactions;
 
@@ -111,6 +112,24 @@ public class DemoDataSeederTests : IClassFixture<BudgetApiFactory>
     }
 
     [Fact]
+    public async Task Reset_DeletesImportMappingsAndRulesThatWereAlreadyThere()
+    {
+        await ResetAsync();
+        await AddOneOfEveryImportRowAsync();
+
+        // Each of these points at an account, a category, a tag or a user with a restricted key, so
+        // a reset that skipped them would fail on that foreign key rather than leave them behind.
+        await ResetAsync();
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BudgetDbContext>();
+        Assert.Empty(db.CsvImportMappings);
+        Assert.Empty(db.ImportIgnoreRules);
+        Assert.Empty(db.ImportAssignmentRules);
+        Assert.Empty(db.ImportAssignmentRuleTags);
+    }
+
+    [Fact]
     public async Task Reset_DeletesUsersThatWereAlreadyThere()
     {
         await ResetAsync();
@@ -145,6 +164,51 @@ public class DemoDataSeederTests : IClassFixture<BudgetApiFactory>
         var client = _factory.CreateClient();
         await client.LoginAsync(BudgetApiFactory.SeededUser1Email, BudgetApiFactory.SeededUser1Password);
         return client;
+    }
+
+    /// <summary>
+    /// Written straight to the context rather than through the import endpoints: what matters here
+    /// is that the rows and their foreign keys exist, not how the household would make them.
+    /// </summary>
+    private async Task AddOneOfEveryImportRowAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BudgetDbContext>();
+        var userId = db.Users.OrderBy(u => u.UserName).Select(u => u.Id).First();
+        var accountId = db.Accounts.OrderBy(a => a.Id).Select(a => a.Id).First();
+        var categoryId = db.Categories.OrderBy(c => c.Id).Select(c => c.Id).First();
+
+        var tag = new TagsFeature.Tag { Name = $"Rule Tag {Guid.NewGuid()}", CreatedByUserId = userId };
+        var rule = new ImportFeature.ImportAssignmentRule
+        {
+            AccountId = accountId,
+            MatchText = "KROGER",
+            CategoryId = categoryId,
+            CreatedByUserId = userId,
+        };
+        db.Tags.Add(tag);
+        db.ImportAssignmentRules.Add(rule);
+        db.CsvImportMappings.Add(new ImportFeature.CsvImportMapping
+        {
+            AccountId = accountId,
+            DateColumn = "Date",
+            DescriptionColumn = "Description",
+            AmountColumn = "Amount",
+            DateFormat = "yyyy-MM-dd",
+            Delimiter = ",",
+            HasHeaderRow = true,
+            CreatedByUserId = userId,
+        });
+        db.ImportIgnoreRules.Add(new ImportFeature.ImportIgnoreRule
+        {
+            AccountId = accountId,
+            MatchText = "AUTOPAY",
+            CreatedByUserId = userId,
+        });
+        await db.SaveChangesAsync();
+
+        db.ImportAssignmentRuleTags.Add(new ImportFeature.ImportAssignmentRuleTag { RuleId = rule.Id, TagId = tag.Id });
+        await db.SaveChangesAsync();
     }
 
     private async Task CreateUserAsync(string email)
