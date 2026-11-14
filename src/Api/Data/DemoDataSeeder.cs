@@ -105,7 +105,15 @@ public class DemoDataSeeder
     /// </summary>
     private async Task DeleteEverythingAsync(CancellationToken cancellationToken)
     {
-        // Tags first: their assignments cascade away with the transactions, but a tag itself points
+        // Import rules and mappings before anything they name: an assignment rule points at a
+        // category, every rule and mapping at an account and the user who made it. The rule-tag join
+        // would cascade, but deleting it explicitly keeps the order readable without knowing that.
+        await _db.ImportAssignmentRuleTags.ExecuteDeleteAsync(cancellationToken);
+        await _db.ImportAssignmentRules.ExecuteDeleteAsync(cancellationToken);
+        await _db.ImportIgnoreRules.ExecuteDeleteAsync(cancellationToken);
+        await _db.CsvImportMappings.ExecuteDeleteAsync(cancellationToken);
+
+        // Tags next: their assignments cascade away with the transactions, but a tag itself points
         // at the user who created it and would block the user delete below.
         await _db.Tags.ExecuteDeleteAsync(cancellationToken);
         await _db.Transactions.ExecuteDeleteAsync(cancellationToken);
