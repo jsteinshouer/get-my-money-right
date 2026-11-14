@@ -25,6 +25,7 @@ feature work. Per ticket, the short version:
 build. For UI work the surface brief is that plan, the way the spec is for API work.
 
 - One fresh session per ticket; tickets are sized for exactly that.
+- Keep files a manageable size: past ~400 lines, split along the code's own seams *before* adding more, and never inside a feature PR. See `docs/agents/coding-standards.md`, which `/code-review` checks against.
 - Don't invoke impeccable during the build. The hook in `.claude/settings.local.json` already runs design checks after every Edit/Write and a deep pass on Stop.
 
 ### Reporting completed work

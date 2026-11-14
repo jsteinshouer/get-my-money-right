@@ -110,7 +110,7 @@ single test files as it goes, and runs the full suite once at the end.
 ## Step 6 — Review
 
 - `/code-review` — `implement` runs this itself. Reviews on two axes: does it follow the repo's
-  standards, and does it match what the ticket asked for.
+  standards (`docs/agents/coding-standards.md`), and does it match what the ticket asked for.
 - UI tickets add the design review: `/impeccable critique <target>` for UX and heuristic scoring,
   `/impeccable audit <target>` for accessibility, performance, and responsive behavior. Critiques
   land in `.impeccable/critique/`.
