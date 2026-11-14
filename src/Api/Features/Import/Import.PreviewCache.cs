@@ -18,24 +18,26 @@ public static partial class Import
 
         private readonly ConcurrentDictionary<string, Entry> _entries = new();
 
-        public record class Entry(int AccountId, string FileName, string Text, DateTimeOffset ExpiresAt);
+        public record class Entry(
+            int AccountId, string UploadedByUserId, string FileName, string Text, DateTimeOffset ExpiresAt);
 
-        public string Add(int accountId, string fileName, string text)
+        public string Add(int accountId, string uploadedByUserId, string fileName, string text)
         {
             Prune();
 
-            // Only the newest upload for an account is ever read back, so an earlier one is dead weight
-            // holding a whole file in memory.
+            // Only a member's newest upload for an account is ever read back, so their earlier one is
+            // dead weight holding a whole file in memory. The other member's is not: both may be at
+            // the import at once, and neither upload is the other's to throw away.
             foreach (var (existingToken, existing) in _entries)
             {
-                if (existing.AccountId == accountId)
+                if (existing.AccountId == accountId && existing.UploadedByUserId == uploadedByUserId)
                 {
                     _entries.TryRemove(existingToken, out _);
                 }
             }
 
             var token = Guid.NewGuid().ToString("N");
-            _entries[token] = new Entry(accountId, fileName, text, DateTimeOffset.UtcNow.Add(Lifetime));
+            _entries[token] = new Entry(accountId, uploadedByUserId, fileName, text, DateTimeOffset.UtcNow.Add(Lifetime));
 
             // A hard ceiling, so abandoned previews cannot accumulate until something else evicts them.
             while (_entries.Count > MaxEntries)

@@ -238,6 +238,154 @@ public class ConfirmTests : IClassFixture<BudgetApiFactory>
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    // --- assignment rules at confirm (ticket 14). Every rule here is scoped to the test's own account:
+    // the test class shares one database, and a global KROGER rule would classify other tests' rows.
+
+    [Fact]
+    public async Task Confirm_WithARuleSettingCategoryAndNeedWant_WritesBothOntoTheMatchingTransaction()
+    {
+        var client = await LoggedInClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Assign One {Guid.NewGuid():N}");
+        var groceries = await CreateCategoryAsync(client, $"Groceries {Guid.NewGuid():N}");
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "KROGER", IgnoreMatchType.Contains, groceries, NeedWant.Need, []));
+        await SaveMappingAsync(client, accountId, SignedAmountMapping());
+        var preview = await UploadOkAsync(client, accountId, "assignment-match.csv");
+
+        await ConfirmOkAsync(client, preview.Token);
+
+        var kroger = (await TransactionsOnAsync(client, accountId)).Single(t => t.Description == "KROGER #442");
+        Assert.Equal(groceries, kroger.CategoryId);
+        Assert.Equal(NeedWant.Need, kroger.NeedWant);
+    }
+
+    [Fact]
+    public async Task Confirm_WithTwoRulesMatchingOneRow_TakesTheCategoryFromOneAndUnionsTheTags()
+    {
+        var client = await LoggedInClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Assign Two {Guid.NewGuid():N}");
+        var travel = await CreateCategoryAsync(client, $"Travel {Guid.NewGuid():N}");
+        var vacation = await CreateTagAsync(client, $"Vacation {Guid.NewGuid():N}");
+        var deductible = await CreateTagAsync(client, $"Deductible {Guid.NewGuid():N}");
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "DELTA", IgnoreMatchType.Contains, travel, null, [vacation]));
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "AIR LINES", IgnoreMatchType.Contains, null, null, [deductible, vacation]));
+        await SaveMappingAsync(client, accountId, SignedAmountMapping());
+        var preview = await UploadOkAsync(client, accountId, "assignment-match.csv");
+
+        await ConfirmOkAsync(client, preview.Token);
+
+        var delta = (await TransactionsOnAsync(client, accountId)).Single(t => t.Description == "DELTA AIR LINES 0062");
+        Assert.Equal(travel, delta.CategoryId);
+        // Neither rule judged it, so it keeps the import's guess.
+        Assert.Equal(NeedWant.Want, delta.NeedWant);
+        Assert.Equivalent(new[] { vacation, deductible }, delta.TagIds, strict: true);
+    }
+
+    [Fact]
+    public async Task Confirm_WithTwoRulesSettingTheSameFields_TheEarlierRuleWins()
+    {
+        var client = await LoggedInClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Assign Order {Guid.NewGuid():N}");
+        var first = await CreateCategoryAsync(client, $"Fuel {Guid.NewGuid():N}");
+        var second = await CreateCategoryAsync(client, $"Snacks {Guid.NewGuid():N}");
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "SHELL", IgnoreMatchType.StartsWith, first, NeedWant.Need, []));
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "OIL", IgnoreMatchType.Contains, second, NeedWant.Want, []));
+        await SaveMappingAsync(client, accountId, SignedAmountMapping());
+        var preview = await UploadOkAsync(client, accountId, "assignment-match.csv");
+
+        await ConfirmOkAsync(client, preview.Token);
+
+        var shell = (await TransactionsOnAsync(client, accountId)).Single(t => t.Description == "SHELL OIL 5578");
+        Assert.Equal(first, shell.CategoryId);
+        Assert.Equal(NeedWant.Need, shell.NeedWant);
+    }
+
+    [Fact]
+    public async Task Confirm_WhenAnIgnoreRuleAndAnAssignmentRuleMatchOneRow_SkipsItAndAssignsNothing()
+    {
+        var client = await LoggedInClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Assign Ignored {Guid.NewGuid():N}");
+        var income = await CreateCategoryAsync(client, $"Income {Guid.NewGuid():N}");
+        await CreateIgnoreRuleAsync(client, accountId, "AUTOPAY", IgnoreMatchType.Contains);
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "AUTOPAY", IgnoreMatchType.Contains, income, NeedWant.Need, []));
+        await SaveMappingAsync(client, accountId, SignedAmountMapping());
+        var preview = await UploadOkAsync(client, accountId, "assignment-match.csv");
+
+        var result = await ConfirmOkAsync(client, preview.Token);
+
+        Assert.Equal(new Confirm.Response(4, 1, 0), result);
+        var stored = await TransactionsOnAsync(client, accountId);
+        Assert.DoesNotContain(stored, t => t.Description == "AUTOPAY THANK YOU");
+        Assert.DoesNotContain(stored, t => t.CategoryId == income);
+    }
+
+    [Fact]
+    public async Task Confirm_RowsNoRuleMatches_ImportWithNoCategoryAsAWant()
+    {
+        var client = await LoggedInClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Assign Unmatched {Guid.NewGuid():N}");
+        var groceries = await CreateCategoryAsync(client, $"Groceries {Guid.NewGuid():N}");
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "KROGER", IgnoreMatchType.Contains, groceries, NeedWant.Need, []));
+        await SaveMappingAsync(client, accountId, SignedAmountMapping());
+        var preview = await UploadOkAsync(client, accountId, "assignment-match.csv");
+
+        await ConfirmOkAsync(client, preview.Token);
+
+        var unmatched = (await TransactionsOnAsync(client, accountId))
+            .Where(t => t.Description != "KROGER #442")
+            .ToList();
+        Assert.Equal(4, unmatched.Count);
+        Assert.All(unmatched, t =>
+        {
+            Assert.Null(t.CategoryId);
+            Assert.Equal(NeedWant.Want, t.NeedWant);
+            Assert.Empty(t.TagIds);
+        });
+    }
+
+    [Fact]
+    public async Task Confirm_AppliesARuleWrittenAfterTheFileWasUploaded()
+    {
+        var client = await LoggedInClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Assign Late {Guid.NewGuid():N}");
+        var groceries = await CreateCategoryAsync(client, $"Groceries {Guid.NewGuid():N}");
+        await SaveMappingAsync(client, accountId, SignedAmountMapping());
+        var preview = await UploadOkAsync(client, accountId, "assignment-match.csv");
+
+        // Rules are read when the import runs, not when the file arrived.
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            accountId, "KROGER", IgnoreMatchType.Contains, groceries, NeedWant.Need, []));
+        await ConfirmOkAsync(client, preview.Token);
+
+        var kroger = (await TransactionsOnAsync(client, accountId)).Single(t => t.Description == "KROGER #442");
+        Assert.Equal(groceries, kroger.CategoryId);
+    }
+
+    [Fact]
+    public async Task Confirm_ARuleScopedToAnotherAccount_DoesNotTouchThisImport()
+    {
+        var client = await LoggedInClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Assign Here {Guid.NewGuid():N}");
+        var otherAccountId = await CreateAccountAsync(client, $"Assign Elsewhere {Guid.NewGuid():N}");
+        var groceries = await CreateCategoryAsync(client, $"Groceries {Guid.NewGuid():N}");
+        await CreateAssignmentRuleAsync(client, new CreateAssignmentRule.Command(
+            otherAccountId, "KROGER", IgnoreMatchType.Contains, groceries, NeedWant.Need, []));
+        await SaveMappingAsync(client, accountId, SignedAmountMapping());
+        var preview = await UploadOkAsync(client, accountId, "assignment-match.csv");
+
+        await ConfirmOkAsync(client, preview.Token);
+
+        var kroger = (await TransactionsOnAsync(client, accountId)).Single(t => t.Description == "KROGER #442");
+        Assert.Null(kroger.CategoryId);
+        Assert.Equal(NeedWant.Want, kroger.NeedWant);
+    }
+
     private static Task<HttpResponseMessage> ConfirmAsync(HttpClient client, string token) =>
         client.PostAsync($"/api/import/previews/{token}/confirm", null);
 

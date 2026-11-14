@@ -186,6 +186,40 @@ public class UploadPreviewTests : IClassFixture<BudgetApiFactory>
     }
 
     [Fact]
+    public async Task Upload_AgainToTheSameAccount_ReplacesThatMembersEarlierPreview()
+    {
+        var client = await LoggedInClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Replace {Guid.NewGuid():N}");
+        var first = await UploadOkAsync(client, accountId, "signed-amount.csv");
+
+        await UploadOkAsync(client, accountId, "signed-amount.csv");
+
+        Assert.Equal(HttpStatusCode.NotFound, (await ReadSignedAmountAsync(client, first.Token)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Upload_ByTheOtherMemberToTheSameAccount_LeavesThisMembersPreviewReadable()
+    {
+        // Both members may be at the import at once — one at the desk, one on a phone tab. Neither
+        // upload is the other's to throw away.
+        var client = await LoggedInClientAsync(_factory);
+        var other = await SecondMemberClientAsync(_factory);
+        var accountId = await CreateAccountAsync(client, $"Two Members {Guid.NewGuid():N}");
+        var mine = await UploadOkAsync(client, accountId, "signed-amount.csv");
+
+        var theirs = await UploadOkAsync(other, accountId, "signed-amount.csv");
+
+        Assert.Equal(HttpStatusCode.OK, (await ReadSignedAmountAsync(client, mine.Token)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ReadSignedAmountAsync(other, theirs.Token)).StatusCode);
+    }
+
+    private static Task<HttpResponseMessage> ReadSignedAmountAsync(HttpClient client, string token) =>
+        client.PostAsJsonAsync(
+            $"/api/import/previews/{token}/reading",
+            new ReadPreview.Command(",", true, "MM/dd/yyyy", "Posted Date", "Payee", "Amount", null, null),
+            TestClientExtensions.JsonOptions);
+
+    [Fact]
     public async Task Upload_WithoutAuthentication_IsRejected()
     {
         var client = _factory.CreateClient();

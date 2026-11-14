@@ -103,4 +103,12 @@ public static class ImportTestHelpers
         await client.LoginAsync(BudgetApiFactory.SeededUser1Email, BudgetApiFactory.SeededUser1Password);
         return client;
     }
+
+    /// <summary>The household's other member, at the same desk or on their own device.</summary>
+    public static async Task<HttpClient> SecondMemberClientAsync(BudgetApiFactory factory)
+    {
+        var client = factory.CreateClient();
+        await client.LoginAsync(BudgetApiFactory.SeededUser2Email, BudgetApiFactory.SeededUser2Password);
+        return client;
+    }
 }

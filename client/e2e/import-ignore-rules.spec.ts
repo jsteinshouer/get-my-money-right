@@ -123,7 +123,7 @@ test('a rule written from a preview row strikes that row in place', async ({ pag
   // The rule is born from the row: its words are the description the row is showing, and its
   // scope is the account being imported.
   await expect(page.getByLabel('These words')).toHaveValue('TRANSFER TO SAVINGS')
-  await expect(page.getByLabel('For')).toHaveValue(/\d+/)
+  await expect(page.locator('.preview-slip').getByLabel('For')).toHaveValue(/\d+/)
   await page.getByRole('button', { name: 'Add rule' }).click()
 
   // The payoff: the row strikes itself where it stands, with no navigation.

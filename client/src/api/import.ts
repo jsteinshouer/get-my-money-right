@@ -100,6 +100,10 @@ export function describeAssignments(rule: AssignmentRule): string {
  * A row carries at most one reason for leaving. A non-null `skippedReason` is the strike, and it
  * silences `error`: the row is leaving anyway. `isDuplicate` is only ever set on a readable,
  * unstruck row — one the ledger already holds.
+ *
+ * A row going in carries what it will be written as — its category (or none), its Need/Want and
+ * its tags — and `classifiedBy` names every rule that decided any of it, the way `skippedReason`
+ * names the rule that struck a row. A row that is leaving has a null `needWant` and nothing else.
  */
 export interface PreviewRow {
   date: string | null
@@ -108,6 +112,11 @@ export interface PreviewRow {
   error: string | null
   skippedReason: string | null
   isDuplicate: boolean
+  categoryId: number | null
+  categoryName: string | null
+  needWant: NeedWant | null
+  tags: { id: number; name: string }[]
+  classifiedBy: string[]
 }
 
 export interface FullPreview {
@@ -116,6 +125,35 @@ export interface FullPreview {
   skippedCount: number
   duplicateCount: number
   errorCount: number
+  /** Rows going in that a rule gives a category. */
+  categorizedCount: number
+  /** Rows going in with no category: the review queue they will join. */
+  forReviewCount: number
+}
+
+/**
+ * A row's second line, in two registers: the marks — what the row is or will be written as — set in
+ * tracked caps, then the notes — why — set as written, so the eye can tell the filing from the reason.
+ */
+export interface SecondLine {
+  marks: string[]
+  notes: string[]
+}
+
+/**
+ * How a row going in will be filed. One order for every form: the category (or its absence), the
+ * Need/Want and the tags; then `for review` while the row has no category; then the rule that decided
+ * it — named in full when there is one, counted when there are several. The citation comes last so it
+ * never reads as the cause of the review. Null for a row that is leaving.
+ */
+export function filedAs(row: PreviewRow): SecondLine | null {
+  if (row.needWant === null) return null
+  const citation =
+    row.classifiedBy.length === 1 ? [row.classifiedBy[0]] : row.classifiedBy.length > 1 ? [`${row.classifiedBy.length} rules`] : []
+  return {
+    marks: [row.categoryName ?? 'No category', row.needWant, ...row.tags.map((tag) => `+${tag.name}`)],
+    notes: [...(row.categoryId === null ? ['for review'] : []), ...citation],
+  }
 }
 
 /** What a confirmed import wrote, and what it left out and why. */
@@ -213,6 +251,13 @@ async function problemDetail(response: Response): Promise<string> {
 }
 
 /**
+ * What a 404 on a held upload means. Since a member's newer upload for the same account replaces
+ * their earlier one, that is said alongside expiry — it is the common cause, and the fix is the same.
+ */
+export const UPLOAD_NOT_HELD =
+  'This upload is no longer held — it expired, or you have uploaded a newer file for this account since. Choose the file again to carry on.'
+
+/**
  * Writes the held file as transactions, through the account's saved mapping. Like the upload, a
  * refusal carries the server's own sentence — "2 rows could not be read…" — so it bypasses
  * apiClient to keep it.
@@ -223,9 +268,7 @@ async function confirm(token: string): Promise<ImportResult> {
   if (!response.ok) {
     throw new ApiError(
       response.status,
-      response.status === 404
-        ? 'The uploaded file is no longer held for this session. Choose the file again to carry on.'
-        : await problemDetail(response),
+      response.status === 404 ? UPLOAD_NOT_HELD : await problemDetail(response),
     )
   }
 
